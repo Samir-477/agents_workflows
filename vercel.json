@@ -7,7 +7,29 @@
     },
     "backend": {
       "root": "backend",
-      "framework": "fastapi"
+      "framework": "fastapi",
+      "routes": [
+        {
+          "src": "/api/backend/(.*)",
+          "transforms": [
+            {
+              "type": "request.path",
+              "op": "set",
+              "args": "/$1"
+            }
+          ]
+        }
+      ]
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/backend/:path*",
+      "destination": { "service": "backend" }
+    },
+    {
+      "source": "/(.*)",
+      "destination": { "service": "frontend" }
+    }
+  ]
 }
