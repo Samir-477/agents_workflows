@@ -4,9 +4,9 @@ from contextlib import asynccontextmanager
 from io import BytesIO
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, status
+from fastapi import APIRouter, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 
 from seo_audit.config import Settings
 from seo_audit.models import (
@@ -53,11 +53,13 @@ def create_app(
         allow_headers=["Content-Type"],
     )
 
-    @app.get("/health")
+    router = APIRouter()
+
+    @router.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.post(
+    @router.post(
         "/audits",
         response_model=AuditResponse,
         status_code=status.HTTP_202_ACCEPTED,
@@ -75,7 +77,7 @@ def create_app(
         audit = repository.create_audit(normalized_request, crawl_limit)
         return AuditResponse(audit=audit)
 
-    @app.get("/audits", response_model=AuditHistoryResponse)
+    @router.get("/audits", response_model=AuditHistoryResponse)
     def list_audits(
         limit: int = 10, offset: int = 0, query: str | None = None
     ) -> AuditHistoryResponse:
@@ -100,7 +102,7 @@ def create_app(
             offset=safe_offset,
         )
 
-    @app.post("/audits/{audit_id}/process", response_model=AuditResponse)
+    @router.post("/audits/{audit_id}/process", response_model=AuditResponse)
     async def process_audit(audit_id: str) -> AuditResponse:
         """Run one queued audit inside this Vercel-safe function invocation."""
         try:
@@ -133,7 +135,7 @@ def create_app(
             report_available=repository.get_report(audit_id) is not None,
         )
 
-    @app.delete("/audits/{audit_id}", status_code=status.HTTP_204_NO_CONTENT)
+    @router.delete("/audits/{audit_id}", status_code=status.HTTP_204_NO_CONTENT)
     def delete_audit(audit_id: str) -> None:
         try:
             audit = repository.get_audit(audit_id)
@@ -145,7 +147,7 @@ def create_app(
             report_file = report_dir / f"{audit.id}.md"
             report_file.unlink(missing_ok=True)
 
-    @app.get("/audits/{audit_id}", response_model=AuditResponse)
+    @router.get("/audits/{audit_id}", response_model=AuditResponse)
     def get_audit(audit_id: str) -> AuditResponse:
         try:
             audit = repository.get_audit(audit_id)
@@ -160,7 +162,7 @@ def create_app(
             report_available=report is not None,
         )
 
-    @app.get("/audits/{audit_id}/report")
+    @router.get("/audits/{audit_id}/report")
     def get_report(audit_id: str):
         try:
             report = repository.get_report(audit_id)
@@ -170,7 +172,7 @@ def create_app(
             raise HTTPException(status_code=409, detail="Audit report is not ready")
         return report
 
-    @app.get("/audits/{audit_id}/report.pdf")
+    @router.get("/audits/{audit_id}/report.pdf")
     def download_report_pdf(audit_id: str) -> StreamingResponse:
         try:
             report = repository.get_report(audit_id)
@@ -186,7 +188,7 @@ def create_app(
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
-    @app.post(
+    @router.post(
         "/audits/{audit_id}/retry",
         response_model=AuditResponse,
         status_code=status.HTTP_202_ACCEPTED,
@@ -199,6 +201,20 @@ def create_app(
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return AuditResponse(audit=audit)
+
+    app.include_router(router)
+    app.include_router(router, prefix="/api/backend")
+    app.include_router(router, prefix="/api")
+
+    @app.get("/api/backend/docs", include_in_schema=False)
+    @app.get("/api/docs", include_in_schema=False)
+    def docs_redirect() -> RedirectResponse:
+        return RedirectResponse(url="/docs")
+
+    @app.get("/api/backend/openapi.json", include_in_schema=False)
+    @app.get("/api/openapi.json", include_in_schema=False)
+    def openapi_redirect() -> RedirectResponse:
+        return RedirectResponse(url="/openapi.json")
 
     return app
 

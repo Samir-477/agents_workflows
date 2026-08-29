@@ -35,8 +35,13 @@ class Settings:
         )
         load_dotenv(dotenv_path=selected_env_file, override=False)
         workspace = Path(os.getenv("SEO_AUDIT_WORKSPACE", Path.cwd()))
+        default_database = (
+            Path("/tmp/audits.sqlite3")
+            if os.getenv("VERCEL")
+            else workspace / "data" / "audits.sqlite3"
+        )
         database_path = Path(
-            os.getenv("SEO_AUDIT_DATABASE", workspace / "data" / "audits.sqlite3")
+            os.getenv("SEO_AUDIT_DATABASE", default_database)
         )
         database_url = (os.getenv("DATABASE_URL") or "").strip() or None
         llm_provider = (os.getenv("SEO_AUDIT_LLM_PROVIDER") or "").strip().lower() or None
@@ -48,14 +53,19 @@ class Settings:
             llm_api_key = os.getenv("OPENAI_API_KEY") or None
         else:
             llm_api_key = None
-        cors_origins = tuple(
-            origin.strip()
-            for origin in os.getenv(
-                "SEO_AUDIT_CORS_ORIGINS",
-                "http://localhost:3000,http://127.0.0.1:3000",
-            ).split(",")
-            if origin.strip()
-        )
+        cors_origins_env = os.getenv("SEO_AUDIT_CORS_ORIGINS")
+        if cors_origins_env is not None:
+            cors_origins = tuple(
+                origin.strip()
+                for origin in cors_origins_env.split(",")
+                if origin.strip()
+            )
+        else:
+            cors_origins = (
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "*",
+            )
         return cls(
             database_path=database_path,
             database_url=database_url,

@@ -32,6 +32,14 @@ def test_create_and_read_queued_audit(tmp_path: Path):
         assert status_response.status_code == 200
         assert status_response.json()["audit"]["status"] == "queued"
 
+        # Verify prefixed routes (/api/backend and /api) resolve properly
+        backend_status = client.get(f"/api/backend/audits/{audit_id}")
+        assert backend_status.status_code == 200
+        assert backend_status.json()["audit"]["status"] == "queued"
+
+        api_status = client.get(f"/api/audits/{audit_id}")
+        assert api_status.status_code == 200
+
         history_response = client.get("/audits")
         assert history_response.status_code == 200
         assert history_response.json()["total"] == 1
