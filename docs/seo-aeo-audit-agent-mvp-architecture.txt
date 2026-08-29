@@ -1,0 +1,456 @@
+SEO/AEO AUDIT AGENT - MVP ARCHITECTURE
+Mentor Review Brief
+
+PURPOSE
+
+We want to build a focused SEO/AEO Audit Agent inspired by the product experience described by Dual7.
+
+The goal is simple:
+
+A user enters a website URL and some business context. The system inspects the website and generates a prioritized, evidence-backed, plain-English report explaining what is wrong, why it matters, and what should be fixed first.
+
+We do not need to begin with microservices, an enterprise crawler, or automatic production-site modifications. A single modular application is enough for the MVP.
+
+
+1. HIGH-LEVEL PRODUCT FLOW
+
+URL and business context
+        |
+        v
+Controlled website crawl
+        |
+        v
+Structured page-data extraction
+        |
+        v
+Deterministic SEO/AEO audit rules
+        |
+        v
+Site-wide comparison and link analysis
+        |
+        v
+Priority and confidence scoring
+        |
+        v
+AI-generated explanations and proposed fixes
+        |
+        v
+Prioritized report and quick wins
+
+Core principle:
+
+Code verifies the facts. AI explains the findings and proposes the next action.
+
+
+2. USER INPUT
+
+The initial audit form should request:
+
+- Website URL
+- A short description of the business
+- Important pages, services, or conversion goals
+- Reason for running the audit
+- Optional crawl-page limit
+
+Examples of audit reasons include a recent migration, a traffic drop, a redesign, weak search visibility, or a pre-launch check.
+
+This context helps the system prioritize findings. A problem on an important service page should rank above the same problem on a low-value archive page.
+
+
+3. CONTROLLED WEBSITE CRAWLER
+
+The crawler inspects the website and discovers internal pages.
+
+Recommended MVP tools:
+
+- httpx for downloading ordinary pages
+- BeautifulSoup for parsing HTML
+- Playwright only when JavaScript rendering is necessary
+
+Initial crawler behavior:
+
+- Stay on the same domain
+- Crawl up to 50 pages by default
+- Follow normal internal links
+- Inspect robots.txt
+- Discover XML sitemaps
+- Record status codes
+- Record redirect chains
+- Use timeouts and polite request limits
+- Avoid URL loops and query-parameter traps
+- Remain completely read-only
+
+We should not render every page with Playwright. Browser rendering is slower and more expensive. It should initially be used for the homepage, important pages, and pages whose raw HTML appears incomplete.
+
+
+4. STRUCTURED PAGE DATA
+
+Every crawled page should be converted into a normalized record.
+
+Example:
+
+{
+  "url": "https://example.com/services",
+  "status": 200,
+  "indexable": true,
+  "title": "Our Services",
+  "meta_description": null,
+  "canonical": "https://example.com/services",
+  "h1": [],
+  "word_count": 175,
+  "internal_links": 6,
+  "images_without_alt": 3,
+  "schema_types": []
+}
+
+Useful page fields include:
+
+- Requested and final URLs
+- Redirect chain
+- HTTP status
+- Indexability and robots directives
+- Canonical URL
+- Title and meta description
+- H1 and other headings
+- Visible text and word count
+- Internal and external links
+- Images and alt attributes
+- Structured data and detected schema types
+- Mobile viewport
+- Crawl depth
+- Content fingerprint for duplicate detection
+
+This structured dataset is the factual foundation of the audit.
+
+
+5. DETERMINISTIC AUDIT ENGINE
+
+Normal code should identify objective SEO problems. The AI should not invent or independently guess crawl facts.
+
+The MVP should begin with approximately 20 high-value rules.
+
+Technical checks:
+
+- Broken pages
+- Redirect chains
+- Missing or conflicting canonical tags
+- Accidental noindex directives
+- Pages blocked from crawling
+- Missing robots.txt
+- Missing sitemap
+- Sitemap and indexability conflicts
+
+On-page checks:
+
+- Missing titles
+- Duplicate titles
+- Missing meta descriptions
+- Duplicate meta descriptions
+- Missing H1
+- Multiple H1 elements
+- Confusing heading hierarchy
+- Images missing alt text
+- Very thin content
+
+Site-structure checks:
+
+- Broken internal links
+- Important pages buried too deeply
+- Orphaned or weakly linked pages
+- Weak or generic anchor text
+- Near-duplicate pages
+
+Schema and AEO checks:
+
+- Invalid JSON-LD
+- Missing relevant schema opportunities
+- Important pages without a clear answer structure
+- Unclear organization, product, service, location, or author identity
+- Important claims without visible support or attribution
+
+Each rule should produce structured evidence.
+
+Example:
+
+{
+  "rule": "missing_h1",
+  "severity": "important",
+  "confidence": "high",
+  "affected_urls": [
+    "https://example.com/services"
+  ],
+  "evidence": "No H1 element was found in the rendered page."
+}
+
+
+6. SITE-WIDE ANALYSIS
+
+After inspecting individual pages, the system compares them across the entire crawled site.
+
+This analysis can identify:
+
+- Duplicate titles and descriptions
+- Similar or overlapping content
+- Orphaned or weakly linked pages
+- Excessive crawl depth
+- Important pages receiving too few links
+- Repeated schema problems
+- Weak internal-link distribution
+
+Important limitation:
+
+Without Google Search Console or similar search-performance data, the system should describe keyword cannibalization as possible content overlap. It should not claim that the overlap definitely caused a ranking or traffic loss.
+
+
+7. PRIORITY SCORING
+
+The system should use a transparent scoring method instead of relying only on AI judgment.
+
+A simple initial formula is:
+
+Priority = severity x page importance x confidence x affected-page count
+
+Severity categories:
+
+CRITICAL
+
+A problem that blocks or seriously affects crawling, access, or indexing of an important page.
+
+IMPORTANT
+
+A problem that meaningfully reduces page clarity, relevance, understanding, or internal discovery.
+
+MINOR
+
+A useful improvement that is unlikely to prevent a page from performing.
+
+The user's business context should influence page importance. For example, an accidental noindex directive on the main services page should rank above a missing description on a privacy-policy page.
+
+
+8. AI REPORT WRITER
+
+The AI layer should run only after the crawler and rule engine have produced verified evidence.
+
+The AI receives:
+
+- Business context
+- Verified findings
+- Supporting evidence
+- Affected URLs
+- Severity and confidence
+- Priority scores
+
+The AI can then:
+
+- Explain each problem in plain English
+- Explain why the problem matters
+- Combine repetitive findings
+- Suggest a practical fix
+- Generate example titles and descriptions
+- Suggest improved headings
+- Suggest internal links
+- Draft JSON-LD schema
+- Produce an executive summary
+- Identify quick wins
+
+The AI should never be asked to inspect the website from memory. It should explain and act on the structured facts collected by the system.
+
+
+9. REPORT EXPERIENCE
+
+The final report should have five main sections:
+
+1. Overall summary
+   A short explanation of the site's general SEO/AEO condition.
+
+2. Fix first
+   Critical issues affecting access, crawling, indexing, or important pages.
+
+3. Important improvements
+   Meaningful but non-blocking issues.
+
+4. Quick wins
+   Changes that are relatively easy and likely to provide immediate value.
+
+5. Page scorecards
+   Summaries for the homepage and other important URLs.
+
+Example report finding:
+
+Missing H1 on the services page
+Severity: Important
+Confidence: High
+Affected page: /services
+
+What we found:
+The page has no primary heading.
+
+Why it matters:
+The page's main topic is less explicit to visitors and search systems.
+
+Recommended fix:
+Add one descriptive H1 near the start of the content.
+
+Suggested version:
+Accounting Services for Bristol Businesses
+
+
+10. RECOMMENDED TECHNOLOGY STACK
+
+Backend:
+Python and FastAPI
+
+Crawler:
+httpx and BeautifulSoup
+
+Selective browser rendering:
+Playwright
+
+Initial database:
+SQLite
+
+Background execution:
+A simple background worker or FastAPI background job
+
+Frontend:
+A lightweight web interface containing an audit form, progress display, report view, and export function
+
+AI:
+An LLM API called only after deterministic analysis
+
+Reports:
+Structured JSON stored by the system and rendered as HTML for users
+
+Deployment:
+One application and one worker process
+
+SQLite and a simple worker are sufficient for early development. PostgreSQL and a dedicated job queue can be introduced later if concurrent usage requires them.
+
+
+11. SUGGESTED PROJECT STRUCTURE
+
+seo-audit-agent/
+|-- app/
+|   |-- api/          Submit and retrieve audits
+|   |-- crawler/      Fetching, URL discovery and sitemaps
+|   |-- extractor/    Metadata, headings, links and schema
+|   |-- rules/        Individual SEO/AEO checks
+|   |-- analysis/     Duplicate and internal-link analysis
+|   |-- scoring/      Severity and priority calculation
+|   |-- reporting/    Explanations and report rendering
+|   |-- models/       Audit, page and finding models
+|   `-- ui/           Initial web interface
+|-- tests/
+|-- samples/
+`-- PROJECT_CONTEXT.md
+
+This remains one application. The folders represent clean internal modules, not separate deployed services.
+
+
+12. FOUR IMPLEMENTATION MILESTONES
+
+MILESTONE 1 - CRAWLER PROTOTYPE
+
+Input:
+A public website URL
+
+Output:
+Reliable structured records for the crawled pages
+
+Success means URL discovery, fetching, parsing, scope limits, and evidence storage work correctly.
+
+
+MILESTONE 2 - AUDIT ENGINE
+
+Implement approximately 20 deterministic rules, site-wide comparison, severity labels, confidence levels, and priority scoring.
+
+At the end of this milestone, the system should be able to generate a useful non-AI JSON or HTML audit.
+
+
+MILESTONE 3 - READABLE REPORT
+
+Create the report experience containing:
+
+- Executive summary
+- Prioritized findings
+- Evidence and affected URLs
+- Recommended fixes
+- Quick wins
+- Page scorecards
+
+
+MILESTONE 4 - AI AND USER EXPERIENCE
+
+Add:
+
+- Plain-English explanations
+- Generated fix suggestions
+- Selective browser rendering
+- Audit progress interface
+- Report export
+
+
+13. INITIAL MVP BOUNDARY
+
+Include now:
+
+- One public website per audit
+- Up to 50 same-domain pages
+- Approximately 20 high-value SEO/AEO rules
+- Severity and confidence
+- Evidence and affected URLs
+- Site-wide duplicate and internal-link checks
+- Plain-English findings
+- Suggested fixes
+- Quick-win section
+- HTML and JSON reporting
+
+Defer initially:
+
+- Automatic production-site changes
+- Seven-stage governance workflow
+- Enterprise-scale crawling
+- Keyword-rank tracking
+- Backlink analysis
+- Confirmed traffic-drop diagnosis without external data
+- Exhaustive Core Web Vitals field data
+- Guaranteed ranking or AI-citation claims
+
+
+14. SECURITY AND RELIABILITY GUARDRAILS
+
+- Every finding must link to evidence and affected URLs.
+- Code should calculate objective facts.
+- AI should explain and draft, not fabricate observations.
+- Confidence should be visible.
+- The audit should remain read-only.
+- Crawl limits, timeouts, rate limits, and loop detection are required.
+- Website content must be treated as untrusted data, not as instructions to the agent.
+- Requests to private or local network targets must be blocked.
+- Unsafe redirect destinations must be rejected.
+- The report must disclose limitations caused by JavaScript, authentication, bot protection, or crawl limits.
+- Any future website modification must require explicit human approval.
+
+
+15. DECISIONS TO CONFIRM BEFORE CODING
+
+Recommended starting positions:
+
+- First customer: small service-business and SaaS marketing sites
+- Crawl limit: 50 public same-domain HTML pages
+- Delivery: simple web application
+- Browser policy: render the homepage, important pages, and incomplete pages
+- AI: optional for detection but used for explanations and drafted fixes
+- Testing: sample websites containing deliberate SEO/AEO defects
+
+
+RECOMMENDED NEXT MOVE
+
+Build the crawler prototype first.
+
+Once URL discovery and structured page extraction are trustworthy, add the first deterministic audit rules and generate a basic non-AI report. The AI explanation layer should be added after the factual audit pipeline works reliably.
+
+
+EVIDENCE NOTE
+
+This proposal is inferred from the supplied Dual7 product description. It does not claim knowledge of Dual7's private source code, internal prompts, scoring formulas, crawl limits, or implementation choices.
