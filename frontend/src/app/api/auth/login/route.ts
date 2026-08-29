@@ -10,7 +10,7 @@ export async function POST(request: Request) {
 
   if (payload?.email !== DEMO_EMAIL || payload.password !== DEMO_PASSWORD) {
     return NextResponse.json(
-      { error: "Incorrect demo email or password." },
+      { error: "Incorrect email or password." },
       { status: 401 },
     );
   }
