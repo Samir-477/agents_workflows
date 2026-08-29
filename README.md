@@ -48,12 +48,12 @@ The login is deliberately a demo gate, not production authentication.
 
 ## Configuration
 
-- For the unified Vercel deployment, add backend secrets to the repository-root
-  Vercel project. The frontend uses same-origin `/api` requests in production.
+- For the Vercel Services deployment, add backend secrets to the repository-root
+  Vercel project. Vercel exposes the backend service at `/api/backend`.
 - For local development, backend settings belong in `backend/.env` and frontend
   configuration belongs in `frontend/.env.local`.
 - Set `NEXT_PUBLIC_API_URL` only when the frontend and backend are deployed as
-  separate services; leave it empty for the unified deployment.
+  separate Vercel projects; leave it empty for the root Services deployment.
 - Production frontend origins must be added to `SEO_AUDIT_CORS_ORIGINS` on the backend.
 
 Local development uses SQLite and optional Markdown files. Production uses

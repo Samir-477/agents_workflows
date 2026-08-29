@@ -254,13 +254,14 @@ The Python vertical slice is implemented under `backend/src/seo_audit/` and curr
 - retrying completed or failed audits.
 
 Decision recorded on 2026-08-29: the repository is a simple two-part monorepo
-that can be deployed either as one unified Vercel project or as two separate
-projects.
+that can be deployed through Vercel Services from one root project or as two
+separate projects.
 
 - `frontend/` contains a Next.js App Router application intended for Vercel.
 - `backend/` contains the Vercel FastAPI entrypoint, optional local worker, crawler, rules, persistence, tests, and local-only artifacts.
-- In the unified deployment, the browser calls the same-origin `/api` path. In
-        the separate-project deployment, it calls the URL configured through
+- In the Vercel Services deployment, the browser calls the same-origin
+        `/api/backend` service path. In the separate-project deployment, it calls the
+        URL configured through
         `NEXT_PUBLIC_API_URL`.
 - FastAPI allows explicitly configured frontend origins through `SEO_AUDIT_CORS_ORIGINS`.
 - Production state lives in Supabase rather than process memory or Vercel's filesystem.
@@ -274,10 +275,10 @@ projects.
 
 Deployment requirement recorded on 2026-08-29: every new product feature must be designed to run in a deployed environment, not only on the local development machine.
 
-- The recommended deployment is one Vercel project rooted at the repository:
-        `frontend/` builds the Next.js app and `api/index.py` exposes FastAPI at
-        `/api`. Two independently rooted Vercel projects remain supported when
-        separate service configuration is required.
+- The recommended deployment is one Vercel Services project rooted at the
+        repository: Vercel detects `frontend/` as Next.js and `backend/` as FastAPI.
+        Two independently rooted Vercel projects remain supported when separate
+        service configuration is required.
 - Production persistence uses Supabase Postgres through its transaction pooler; SQLite remains the local fallback only.
 - The Vercel path replaces the permanent polling worker with a bounded, idempotently claimed `/audits/{id}/process` invocation started by the run page. The worker remains a local-development option.
 - The current 20-page MVP is intentionally bounded to fit Vercel's function duration. Durable multi-invocation crawling with Vercel Queues or Workflow is deferred until larger crawls are required.
