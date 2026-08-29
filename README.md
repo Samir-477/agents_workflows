@@ -6,8 +6,8 @@ An evidence-backed website audit application with a Next.js frontend and a FastA
 
 ```text
 seo_agent_idea/
-  frontend/          Next.js web interface; deploy as one Vercel project
-  backend/           FastAPI functions; deploy as a second Vercel project
+  frontend/          Next.js web interface
+  backend/           FastAPI application and local worker
   supabase/          PostgreSQL migrations for durable audit history
   docs/              Architecture, implementation, and deployment notes
   PROJECT_CONTEXT.md Durable product and architecture brief
@@ -48,9 +48,12 @@ The login is deliberately a demo gate, not production authentication.
 
 ## Configuration
 
-- Backend secrets and crawler settings belong in `backend/.env`.
-- Frontend configuration belongs in `frontend/.env.local`.
-- `NEXT_PUBLIC_API_URL` tells the browser where the FastAPI service is hosted.
+- For the unified Vercel deployment, add backend secrets to the repository-root
+  Vercel project. The frontend uses same-origin `/api` requests in production.
+- For local development, backend settings belong in `backend/.env` and frontend
+  configuration belongs in `frontend/.env.local`.
+- Set `NEXT_PUBLIC_API_URL` only when the frontend and backend are deployed as
+  separate services; leave it empty for the unified deployment.
 - Production frontend origins must be added to `SEO_AUDIT_CORS_ORIGINS` on the backend.
 
 Local development uses SQLite and optional Markdown files. Production uses

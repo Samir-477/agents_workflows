@@ -20,4 +20,7 @@ cmd /c npm run dev
 
 The demo session uses an HTTP-only cookie and `src/proxy.ts` protects the agent routes. It is intentionally not a replacement for production authentication.
 
-For Vercel, set the project Root Directory to `frontend` and configure `NEXT_PUBLIC_API_URL` for Preview and Production.
+For the unified Vercel deployment, leave `NEXT_PUBLIC_API_URL` unset; the
+frontend calls the same deployment's `/api` path in production. For the
+separate-project setup, set the project Root Directory to `frontend` and
+configure `NEXT_PUBLIC_API_URL` for Preview and Production.

@@ -1,0 +1,8 @@
+{
+  "name": "seo-aeo-audit-agent",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix frontend run build",
+    "lint": "npm --prefix frontend run lint"
+  }
+}

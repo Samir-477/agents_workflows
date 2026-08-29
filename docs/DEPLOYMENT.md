@@ -1,5 +1,21 @@
 # Vercel + Supabase deployment
 
+## Unified deployment (recommended)
+
+Create one Vercel project from the repository root. Leave **Root Directory**
+set to `.`. The root `vercel.json` builds `frontend/` and exposes the FastAPI
+application at `/api`, so one deployment contains both services.
+
+Add the backend variables below to this single Vercel project for Preview and
+Production. Do not add `NEXT_PUBLIC_API_URL`; the frontend automatically uses
+the same-origin `/api` path in production. Root-level Vercel environment
+variables are available to both the Next.js build and the Python function.
+
+After deployment, use the generated URL for the whole app. The API is available
+at `<deployment-url>/api/docs`.
+
+## Separate deployment (alternative)
+
 The repository is deployed as **two Vercel projects**. Both projects use the
 same Git repository but have different Root Directories. This keeps the
 frontend and Python API independently configurable without relying on Vercel

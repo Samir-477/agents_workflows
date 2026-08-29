@@ -253,13 +253,17 @@ The Python vertical slice is implemented under `backend/src/seo_audit/` and curr
 - SQLite persistence for local development and Supabase Postgres for production; and
 - retrying completed or failed audits.
 
-Decision recorded on 2026-08-29: the repository is a simple two-part monorepo.
+Decision recorded on 2026-08-29: the repository is a simple two-part monorepo
+that can be deployed either as one unified Vercel project or as two separate
+projects.
 
 - `frontend/` contains a Next.js App Router application intended for Vercel.
 - `backend/` contains the Vercel FastAPI entrypoint, optional local worker, crawler, rules, persistence, tests, and local-only artifacts.
-- The browser calls the backend URL configured through `NEXT_PUBLIC_API_URL`.
+- In the unified deployment, the browser calls the same-origin `/api` path. In
+        the separate-project deployment, it calls the URL configured through
+        `NEXT_PUBLIC_API_URL`.
 - FastAPI allows explicitly configured frontend origins through `SEO_AUDIT_CORS_ORIGINS`.
-- The backend is a second Vercel project. Production state lives in Supabase rather than process memory or Vercel's filesystem.
+- Production state lives in Supabase rather than process memory or Vercel's filesystem.
 - The frontend uses the Stellar brand with the supplied orange/indigo visual direction.
 - A deliberately small demo login (`admin@gmail.com` / `admin123`) sets an HTTP-only cookie and protects the agent workspace. This is not production authentication.
 - `/agents` provides a searchable catalogue with one live SEO Audit Agent and clearly labelled coming-soon placeholders for future agents.
@@ -270,7 +274,10 @@ Decision recorded on 2026-08-29: the repository is a simple two-part monorepo.
 
 Deployment requirement recorded on 2026-08-29: every new product feature must be designed to run in a deployed environment, not only on the local development machine.
 
-- The single Git repository is deployed as two Vercel projects: `frontend/` for Next.js and `backend/` for FastAPI's Python runtime.
+- The recommended deployment is one Vercel project rooted at the repository:
+        `frontend/` builds the Next.js app and `api/index.py` exposes FastAPI at
+        `/api`. Two independently rooted Vercel projects remain supported when
+        separate service configuration is required.
 - Production persistence uses Supabase Postgres through its transaction pooler; SQLite remains the local fallback only.
 - The Vercel path replaces the permanent polling worker with a bounded, idempotently claimed `/audits/{id}/process` invocation started by the run page. The worker remains a local-development option.
 - The current 20-page MVP is intentionally bounded to fit Vercel's function duration. Durable multi-invocation crawling with Vercel Queues or Workflow is deferred until larger crawls are required.
