@@ -1,7 +1,0 @@
-.env
-.pytest_cache
-tests
-data
-reports
-**/__pycache__
-**/*.pyc

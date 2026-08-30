@@ -1,74 +1,71 @@
-# Vercel + Supabase deployment
+# One Vercel deployment + Supabase
 
-## Vercel Services deployment (recommended)
+## Deployment model
 
-Create one Vercel project from the repository root. Leave **Root Directory**
-set to `.` and choose the **Other** application preset. Vercel will show and
-deploy both detected services: `frontend` as Next.js and `backend` as FastAPI.
-The backend service path is `/api/backend`.
-
-Add the backend variables below to this single Vercel project for Preview and
-Production. Do not add `NEXT_PUBLIC_API_URL`; the frontend automatically uses
-the same-origin `/api/backend` path in production. Root-level Vercel
-environment variables are available to the services.
-
-After deployment, use the generated frontend URL for the app. FastAPI docs are
-available at `<deployment-url>/api/backend/docs`.
-
-## Separate deployment (alternative)
-
-The repository is deployed as **two Vercel projects**. Both projects use the
-same Git repository but have different Root Directories. This keeps the
-frontend and Python API independently configurable without relying on Vercel
-Services private beta.
-
-## Frontend: Vercel
-
-Create a Vercel project from the repository and set its Root Directory to `frontend`.
-
-Configure this environment variable for Preview and Production:
+Deploy the repository as one Vercel project with Root Directory `.`.
 
 ```text
-NEXT_PUBLIC_API_URL=https://your-stellar-api.vercel.app
+src/                         Next.js frontend
+api/index.py                 Vercel Python/FastAPI entrypoint
+backend/src/seo_audit/       backend implementation imported by the entrypoint
 ```
 
-Next.js has first-class Vercel support. No custom build command is required when `frontend` is selected as the project root.
+Vercel's documented Next.js + Python layout builds the frontend from the root
+`package.json` and packages `api/index.py` as a Python function. Requests to
+`/` reach Next.js, while `/api/*` reaches FastAPI on the same domain.
 
-## Backend: Vercel Python / FastAPI
-
-Create a second Vercel project from the same repository and set its Root
-Directory to `backend`. Vercel discovers `backend/app.py` as the FastAPI
-entrypoint. `backend/vercel.json` gives bounded audits the Hobby-plan maximum
-duration of 300 seconds.
-
-Set these backend environment variables:
+## Vercel project settings
 
 ```text
-DATABASE_URL=postgresql://...supabase-pooler...:6543/postgres
-SEO_AUDIT_CORS_ORIGINS=https://your-stellar-frontend.vercel.app
+Root Directory: .
+Framework Preset: Next.js
+Build Command: npm run build (default)
+Output Directory: .next (default)
+Install Command: npm install / npm ci (default)
+```
+
+Do not select `frontend`, `backend`, or `api` as the Root Directory. There is
+only one Vercel project.
+
+## Environment variables
+
+Add these to the one Vercel project:
+
+```text
+DATABASE_URL=postgresql://...supabase-transaction-pooler...:6543/postgres
 SEO_AUDIT_LLM_PROVIDER=groq
 SEO_AUDIT_LLM_MODEL=openai/gpt-oss-20b
 GROQ_API_KEY=your-secret-key
+SEO_AUDIT_DEFAULT_CRAWL_LIMIT=20
+SEO_AUDIT_MAX_CRAWL_LIMIT=100
+SEO_AUDIT_ALLOW_PRIVATE_NETWORKS=false
 ```
 
-Use the Supabase **transaction pooler** connection string for `DATABASE_URL`,
-not the browser-facing project URL or anon key. The repository disables Psycopg
-prepared statements because transaction pooling does not support them.
+Do not add `NEXT_PUBLIC_API_URL` or `SEO_AUDIT_CORS_ORIGINS` in this deployment.
+The browser uses the same origin, so neither a backend hostname nor CORS is
+required.
 
-Before the first deploy, run
-`supabase/migrations/202608290001_initial_audit_schema.sql` in Supabase's SQL
-editor. FastAPI also performs idempotent table initialization as a safety net.
+Use Supabase's transaction-pooler connection string for `DATABASE_URL`, not the
+browser-facing project URL. Encode reserved password characters; for example,
+`#` becomes `%23`.
 
-## How production audit execution works
+Run `supabase/migrations/202608290001_initial_audit_schema.sql` in Supabase's
+SQL editor before the first production audit.
 
-The API first inserts a queued run into Supabase. The run page then calls the
-bounded `/audits/{id}/process` endpoint once and polls the saved progress. This
-replaces the continuously running worker, which Vercel cannot host. The local
-worker command is retained for local development and testing.
+## Verify
 
-The MVP crawl limit should remain at 20 on the Hobby plan. A future large-site
-version should use Vercel Queues or Workflow so each crawl is durable beyond one
-function invocation.
+After deployment, open:
 
-PDFs are generated on demand from report JSON stored in Supabase. No production
-feature depends on Vercel's ephemeral filesystem.
+```text
+https://your-project.vercel.app/api/health
+https://your-project.vercel.app/api/docs
+```
+
+The health endpoint should return `{"status":"ok"}`. Then open the same domain
+and run a 20-page audit from the frontend.
+
+## Adding agents later
+
+Add frontend UI under `src/` and backend code under `backend/src/<agent_name>/`.
+Expose each agent under a sibling `/api/agents/<agent-name>` namespace. The one
+Vercel project continues to deploy all agents.

@@ -1,62 +1,62 @@
-# SEO/AEO Audit Agent
+# Stellar Agents
 
-An evidence-backed website audit application with a Next.js frontend and a FastAPI/LangGraph backend.
+Stellar is a multi-agent web application built with Next.js and FastAPI. It is
+structured for one direct Vercel deployment while keeping the backend's domain
+logic isolated from the frontend source.
 
-## Project structure
+## Structure
 
 ```text
-seo_agent_idea/
-  frontend/          Next.js web interface
-  backend/           FastAPI application and local worker
-  supabase/          PostgreSQL migrations for durable audit history
-  docs/              Architecture, implementation, and deployment notes
-  PROJECT_CONTEXT.md Durable product and architecture brief
+stellar-agents/
+  src/                       Next.js frontend
+  api/index.py               small Vercel FastAPI entrypoint
+  backend/
+    src/seo_audit/           crawler, rules, workflow, storage, and reports
+    tests/                   backend tests
+    app.py                   optional standalone local entrypoint
+  supabase/                  production database migrations
+  docs/                      architecture and deployment notes
+  package.json               Next.js dependencies
+  requirements.txt           Python dependency entrypoint for Vercel
+  vercel.json                Python function duration and bundle settings
 ```
+
+The root `api/index.py` is only Vercel's routing adapter. The actual backend
+implementation remains under `backend/src/`.
 
 ## Run locally
 
-Install and start the backend API:
+Install dependencies from the repository root:
 
 ```powershell
-cd backend
-python -m pip install -e ".[dev]"
-seo-audit-api
+cmd /c npm ci
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-In a second terminal, start the frontend:
+Start FastAPI:
 
 ```powershell
-cd frontend
-Copy-Item .env.example .env.local
+python -m uvicorn api.index:app --reload --port 8000
+```
+
+Start Next.js in another terminal:
+
+```powershell
 cmd /c npm run dev
 ```
 
-Open `http://localhost:3000`. FastAPI documentation is available at `http://127.0.0.1:8000/docs`.
+Open `http://localhost:3000`. FastAPI docs are available at
+`http://127.0.0.1:8000/api/docs`.
 
-The frontend starts each bounded audit through the API. `seo-audit-worker`
-remains available for command-line/local queue testing, but it is not required
-for the web app and is not part of the Vercel deployment.
+## Deploy
 
-Demo login:
+Import this repository into Vercel once and keep Root Directory set to `.`.
+Vercel builds the root Next.js application and packages `api/index.py` as the
+Python API. Both are served from one deployment domain.
 
-```text
-Email: admin@gmail.com
-Password: admin123
-```
+Production requests use the same-origin `/api/agents/seo-audit` path, so do not
+set `NEXT_PUBLIC_API_URL` in Vercel.
 
-The login is deliberately a demo gate, not production authentication.
-
-## Configuration
-
-- For the Vercel Services deployment, add backend secrets to the repository-root
-  Vercel project. Vercel exposes the backend service at `/api/backend`.
-- For local development, backend settings belong in `backend/.env` and frontend
-  configuration belongs in `frontend/.env.local`.
-- Set `NEXT_PUBLIC_API_URL` only when the frontend and backend are deployed as
-  separate Vercel projects; leave it empty for the root Services deployment.
-- Production frontend origins must be added to `SEO_AUDIT_CORS_ORIGINS` on the backend.
-
-Local development uses SQLite and optional Markdown files. Production uses
-Supabase Postgres; PDFs are generated on demand from the persisted report JSON.
-
-See [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), [deployment notes](docs/DEPLOYMENT.md), and [implementation status](docs/IMPLEMENTATION_STATUS.md).
+See [deployment notes](docs/DEPLOYMENT.md) and
+[PROJECT_CONTEXT.md](PROJECT_CONTEXT.md).

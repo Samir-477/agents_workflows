@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from io import BytesIO
+from pathlib import Path
 
 import uvicorn
 from fastapi import APIRouter, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 
 from seo_audit.config import Settings
 from seo_audit.models import (
@@ -27,10 +28,7 @@ def create_app(
     repository: AuditRepository | None = None,
 ) -> FastAPI:
     settings = settings or Settings.from_env()
-    repository = repository or AuditRepository(
-        settings.database_path,
-        database_url=settings.database_url,
-    )
+    repository = repository or AuditRepository(settings.database_url)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -41,6 +39,10 @@ def create_app(
         title="SEO/AEO Audit Agent API",
         version="0.1.0",
         description="Queue and retrieve evidence-backed website audits.",
+        docs_url="/api/docs",
+        openapi_url="/api/openapi.json",
+        redoc_url=None,
+        swagger_ui_oauth2_redirect_url="/api/docs/oauth2-redirect",
         lifespan=lifespan,
     )
     app.state.settings = settings
@@ -48,16 +50,13 @@ def create_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
+        allow_origin_regex=settings.cors_origin_regex,
         allow_credentials=False,
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type"],
     )
 
     router = APIRouter()
-
-    @router.get("/health")
-    def health() -> dict[str, str]:
-        return {"status": "ok"}
 
     @router.post(
         "/audits",
@@ -143,7 +142,7 @@ def create_app(
         except AuditNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Audit not found") from exc
         if settings.write_report_files:
-            report_dir = settings.report_output_dir or settings.database_path.parent / "reports"
+            report_dir = settings.report_output_dir or Path.cwd() / "reports"
             report_file = report_dir / f"{audit.id}.md"
             report_file.unlink(missing_ok=True)
 
@@ -203,24 +202,22 @@ def create_app(
         return AuditResponse(audit=audit)
 
     app.include_router(router)
-    app.include_router(router, prefix="/api/backend")
-    app.include_router(router, prefix="/api")
 
-    @app.get("/api/backend/docs", include_in_schema=False)
-    @app.get("/api/docs", include_in_schema=False)
-    def docs_redirect() -> RedirectResponse:
-        return RedirectResponse(url="/docs")
+    @app.get("/health", include_in_schema=False)
+    @app.get("/api/health", tags=["system"])
+    def health() -> dict[str, str]:
+        return {"status": "ok"}
 
-    @app.get("/api/backend/openapi.json", include_in_schema=False)
-    @app.get("/api/openapi.json", include_in_schema=False)
-    def openapi_redirect() -> RedirectResponse:
-        return RedirectResponse(url="/openapi.json")
+    app.include_router(router, prefix="/api/agents/seo-audit")
 
     return app
 
 
-app = create_app()
-
-
 def run() -> None:
-    uvicorn.run("seo_audit.api:app", host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run(
+        "seo_audit.api:create_app",
+        factory=True,
+        host="127.0.0.1",
+        port=8000,
+        reload=False,
+    )

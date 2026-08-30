@@ -26,7 +26,7 @@ export function AppHeader() {
           >
             History
           </Link>
-          <form action="/api/auth/logout" method="post">
+          <form action="/auth/logout" method="post">
             <button
               type="submit"
               className="rounded-xl border border-[#deddd9] bg-white px-4 py-2.5 text-sm font-semibold text-[#20212a] transition hover:border-[#bdbcb8] hover:bg-[#faf9f7]"

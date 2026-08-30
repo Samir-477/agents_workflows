@@ -5,7 +5,7 @@ import pytest
 from seo_audit.config import Settings
 from seo_audit.crawler import CrawlResult
 from seo_audit.models import AuditCreate, AuditStatus
-from seo_audit.storage import AuditRepository
+from memory_repository import MemoryAuditRepository
 from seo_audit.url_safety import ValidatedTarget
 from seo_audit.workflow import build_audit_graph
 
@@ -28,8 +28,8 @@ async def fake_validator(url: str, **_: object) -> ValidatedTarget:
 
 @pytest.mark.asyncio
 async def test_robots_block_produces_limited_report_without_score(tmp_path: Path):
-    settings = Settings(database_path=tmp_path / "limited.sqlite3")
-    repository = AuditRepository(settings.database_path)
+    settings = Settings(report_output_dir=tmp_path / "reports")
+    repository = MemoryAuditRepository()
     repository.initialize()
     audit = repository.create_audit(AuditCreate(url="https://example.com/"), 10)
     repository.claim_next_audit()

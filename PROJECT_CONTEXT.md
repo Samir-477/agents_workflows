@@ -246,24 +246,26 @@ The Python vertical slice is implemented under `backend/src/seo_audit/` and curr
 - initial page-level and site-wide deterministic rules;
 - transparent severity/confidence scoring;
 - deterministic or optionally LLM-assisted report generation;
-- automatic Markdown report export to `backend/reports/<audit-id>.md`;
+- automatic Markdown report export to `reports/<audit-id>.md` during local development;
 - representative bounded-crawl sampling across likely category, product, and other URLs;
 - grouped repeated page-level findings and site-score penalties capped once per rule;
 - URL-hinted Product structured-data checks;
-- SQLite persistence for local development and Supabase Postgres for production; and
+- Supabase Postgres persistence in local and deployed environments; and
 - retrying completed or failed audits.
 
-Decision recorded on 2026-08-29: the repository is a simple two-part monorepo
-that can be deployed through Vercel Services from one root project or as two
-separate projects.
+Decision updated on 2026-08-30: the product uses Vercel's standard combined
+Next.js + Python layout and deploys as one project from the repository root.
 
-- `frontend/` contains a Next.js App Router application intended for Vercel.
-- `backend/` contains the Vercel FastAPI entrypoint, optional local worker, crawler, rules, persistence, tests, and local-only artifacts.
-- In the Vercel Services deployment, the browser calls the same-origin
-        `/api/backend` service path. In the separate-project deployment, it calls the
-        URL configured through
-        `NEXT_PUBLIC_API_URL`.
-- FastAPI allows explicitly configured frontend origins through `SEO_AUDIT_CORS_ORIGINS`.
+- `src/` contains the Next.js App Router frontend and root Node tooling builds it.
+- `api/index.py` is the small Python entrypoint Vercel maps under `/api/*`.
+- `backend/src/seo_audit/` contains the current agent's crawler, rules,
+  persistence, workflow, and reporting modules.
+- Future backend agents belong under `backend/src/<agent_name>/` and register
+  their own route namespaces with the FastAPI application.
+- `backend/tests/` and `backend/pyproject.toml` contain backend verification and
+  standalone Python tooling; root `requirements.txt` exposes dependencies to Vercel.
+- In production, the frontend calls same-origin `/api/agents/seo-audit` routes.
+  `NEXT_PUBLIC_API_URL` remains a local-development override only.
 - Production state lives in Supabase rather than process memory or Vercel's filesystem.
 - The frontend uses the Stellar brand with the supplied orange/indigo visual direction.
 - A deliberately small demo login (`admin@gmail.com` / `admin123`) sets an HTTP-only cookie and protects the agent workspace. This is not production authentication.
@@ -275,11 +277,11 @@ separate projects.
 
 Deployment requirement recorded on 2026-08-29: every new product feature must be designed to run in a deployed environment, not only on the local development machine.
 
-- The recommended deployment is one Vercel Services project rooted at the
-        repository: Vercel detects `frontend/` as Next.js and `backend/` as FastAPI.
-        Two independently rooted Vercel projects remain supported when separate
-        service configuration is required.
-- Production persistence uses Supabase Postgres through its transaction pooler; SQLite remains the local fallback only.
+- One Vercel project uses Root Directory `.`. Vercel builds Next.js from the
+  root package and packages `api/index.py` as the Python/FastAPI function.
+- The frontend and backend share one origin, so production does not require a
+  backend URL environment variable or CORS configuration.
+- All persistence uses Supabase Postgres through its transaction pooler; there is no embedded local database fallback.
 - The Vercel path replaces the permanent polling worker with a bounded, idempotently claimed `/audits/{id}/process` invocation started by the run page. The worker remains a local-development option.
 - The current 20-page MVP is intentionally bounded to fit Vercel's function duration. Durable multi-invocation crawling with Vercel Queues or Workflow is deferred until larger crawls are required.
 - Generated PDF responses should remain on-demand downloads; future stored artifacts should use durable object storage rather than a local reports directory.

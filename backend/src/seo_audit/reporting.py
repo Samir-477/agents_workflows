@@ -43,9 +43,7 @@ class ReportWriter:
         return report
 
     def export_markdown(self, report: AuditReport) -> Path:
-        output_dir = self.settings.report_output_dir or (
-            self.settings.database_path.parent / "reports"
-        )
+        output_dir = self.settings.report_output_dir or Path.cwd() / "reports"
         output_dir.mkdir(parents=True, exist_ok=True)
         output_path = output_dir / f"{report.audit_id}.md"
         output_path.write_text(render_markdown(report), encoding="utf-8")

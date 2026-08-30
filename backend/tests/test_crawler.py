@@ -6,7 +6,7 @@ from seo_audit.page_types import infer_page_type, representative_url_order
 
 
 def test_crawler_requests_stable_compression_encodings(tmp_path: Path):
-    settings = Settings(database_path=tmp_path / "test.sqlite3")
+    settings = Settings()
     crawler = SiteCrawler(settings)
 
     assert crawler.request_headers()["Accept-Encoding"] == "gzip, deflate"
@@ -34,7 +34,7 @@ def test_blocked_start_page_reports_the_real_cause(tmp_path: Path, monkeypatch):
     import httpx
     import pytest
 
-    settings = Settings(database_path=tmp_path / "test.sqlite3")
+    settings = Settings()
     crawler = SiteCrawler(settings)
 
     async def fake_validate(url: str, allow_private_networks: bool = False):

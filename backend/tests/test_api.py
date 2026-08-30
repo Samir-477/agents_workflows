@@ -6,12 +6,12 @@ from seo_audit.api import create_app
 from seo_audit.config import Settings
 from seo_audit.models import AuditCreate, AuditReport
 from seo_audit.models import AuditStage, AuditStatus
-from seo_audit.storage import AuditRepository
+from memory_repository import MemoryAuditRepository
 
 
 def test_create_and_read_queued_audit(tmp_path: Path):
-    settings = Settings(database_path=tmp_path / "api.sqlite3")
-    repository = AuditRepository(settings.database_path)
+    settings = Settings(report_output_dir=tmp_path / "reports")
+    repository = MemoryAuditRepository()
     app = create_app(settings, repository)
 
     with TestClient(app) as client:
@@ -32,13 +32,17 @@ def test_create_and_read_queued_audit(tmp_path: Path):
         assert status_response.status_code == 200
         assert status_response.json()["audit"]["status"] == "queued"
 
-        # Verify prefixed routes (/api/backend and /api) resolve properly
-        backend_status = client.get(f"/api/backend/audits/{audit_id}")
-        assert backend_status.status_code == 200
-        assert backend_status.json()["audit"]["status"] == "queued"
-
-        api_status = client.get(f"/api/audits/{audit_id}")
+        # The deployed SEO agent is namespaced for future agent routes.
+        api_status = client.get(f"/api/agents/seo-audit/audits/{audit_id}")
         assert api_status.status_code == 200
+        assert api_status.json()["audit"]["status"] == "queued"
+
+        docs_response = client.get("/api/openapi.json")
+        assert docs_response.status_code == 200
+
+        health_response = client.get("/api/health")
+        assert health_response.status_code == 200
+        assert health_response.json() == {"status": "ok"}
 
         history_response = client.get("/audits")
         assert history_response.status_code == 200
@@ -65,8 +69,8 @@ def test_create_and_read_queued_audit(tmp_path: Path):
 
 
 def test_completed_report_can_be_downloaded_as_pdf(tmp_path: Path):
-    settings = Settings(database_path=tmp_path / "api.sqlite3")
-    repository = AuditRepository(settings.database_path)
+    settings = Settings(report_output_dir=tmp_path / "reports")
+    repository = MemoryAuditRepository()
     repository.initialize()
     audit = repository.create_audit(
         request=AuditCreate(url="https://example.com/"),
@@ -97,8 +101,8 @@ def test_completed_report_can_be_downloaded_as_pdf(tmp_path: Path):
 
 
 def test_serverless_process_endpoint_claims_and_runs_audit(tmp_path: Path, monkeypatch):
-    settings = Settings(database_path=tmp_path / "api.sqlite3")
-    repository = AuditRepository(settings.database_path)
+    settings = Settings(report_output_dir=tmp_path / "reports")
+    repository = MemoryAuditRepository()
 
     class FakeGraph:
         async def ainvoke(self, state):

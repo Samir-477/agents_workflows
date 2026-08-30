@@ -1,8 +1,10 @@
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
 const API_BASE_URL =
-  rawApiUrl && /^https?:\/\//i.test(rawApiUrl)
-    ? rawApiUrl.replace(/\/$/, "")
-    : (process.env.NODE_ENV === "production" ? "/api" : "http://127.0.0.1:8000");
+  process.env.NODE_ENV === "production"
+    ? "/api/agents/seo-audit"
+    : rawApiUrl && /^https?:\/\//i.test(rawApiUrl)
+      ? rawApiUrl.replace(/\/$/, "")
+      : "http://127.0.0.1:8000/api/agents/seo-audit";
 
 export type AuditStatus = "queued" | "running" | "complete" | "failed";
 

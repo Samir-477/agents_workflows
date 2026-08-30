@@ -306,8 +306,8 @@ httpx and BeautifulSoup
 Selective browser rendering:
 Playwright
 
-Initial database:
-SQLite
+Database:
+Supabase Postgres
 
 Background execution:
 A simple background worker or FastAPI background job
@@ -324,7 +324,7 @@ Structured JSON stored by the system and rendered as HTML for users
 Deployment:
 One application and one worker process
 
-SQLite and a simple worker are sufficient for early development. PostgreSQL and a dedicated job queue can be introduced later if concurrent usage requires them.
+Supabase Postgres is used from the beginning so audit history is durable and consistent across local and deployed environments. A dedicated job queue can be introduced later if concurrent usage requires it.
 
 
 11. SUGGESTED PROJECT STRUCTURE

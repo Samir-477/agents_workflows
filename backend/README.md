@@ -1,16 +1,18 @@
-# Backend
+# Stellar backend implementation
 
-FastAPI, LangGraph, the crawler, deterministic SEO/AEO rules, Groq-assisted
-reporting, and persistence live here. SQLite is the local fallback; Vercel uses
-Supabase Postgres through `DATABASE_URL`.
+This folder contains the Python backend domain code and tests. It is not a
+second Vercel project.
+
+- `src/seo_audit/` contains the active agent.
+- `tests/` contains backend verification.
+- `app.py` allows the backend to run independently during local debugging.
+- Root `../api/index.py` imports this package for the combined Vercel deployment.
+
+Future backend agents should receive their own package under `src/` and expose
+a distinct route namespace through the shared FastAPI application.
+
+Run backend tests from this folder:
 
 ```powershell
-python -m pip install -e ".[dev]"
-seo-audit-api
+python -m pytest
 ```
-
-The frontend calls `/audits/{id}/process`, allowing FastAPI to run each bounded
-audit inside one request locally or one Vercel invocation in production.
-`seo-audit-worker` remains available only for command-line queue testing.
-
-Copy `.env.example` to `.env` for a new local setup. Keep real keys only in `.env`.

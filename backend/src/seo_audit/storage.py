@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import json
 import re
-import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Iterator
 
 from seo_audit.models import (
@@ -26,33 +24,27 @@ class AuditNotFoundError(LookupError):
 
 
 class AuditRepository:
-    def __init__(self, database_path: Path, database_url: str | None = None):
-        self.database_path = database_path
+    def __init__(self, database_url: str | None):
+        if not database_url:
+            raise ValueError(
+                "DATABASE_URL is required. Stellar stores audits in Supabase Postgres."
+            )
         self.database_url = database_url
-        self.is_postgres = bool(database_url)
-        if not self.is_postgres:
-            self.database_path.parent.mkdir(parents=True, exist_ok=True)
 
     @contextmanager
     def connect(self) -> Iterator[Any]:
-        if self.is_postgres:
-            try:
-                import psycopg
-                from psycopg.rows import dict_row
-            except ImportError as exc:
-                raise RuntimeError(
-                    "PostgreSQL requires the 'psycopg[binary]' package"
-                ) from exc
-            connection = psycopg.connect(
-                self.database_url,
-                row_factory=dict_row,
-                prepare_threshold=None,
-            )
-        else:
-            connection = sqlite3.connect(self.database_path, timeout=30)
-            connection.row_factory = sqlite3.Row
-            connection.execute("PRAGMA foreign_keys = ON")
-            connection.execute("PRAGMA journal_mode = WAL")
+        try:
+            import psycopg
+            from psycopg.rows import dict_row
+        except ImportError as exc:
+            raise RuntimeError(
+                "PostgreSQL requires the 'psycopg[binary]' package"
+            ) from exc
+        connection = psycopg.connect(
+            self.database_url,
+            row_factory=dict_row,
+            prepare_threshold=None,
+        )
         try:
             yield connection
             connection.commit()
@@ -63,8 +55,6 @@ class AuditRepository:
             connection.close()
 
     def _sql(self, statement: str, params: Any = None) -> str:
-        if not self.is_postgres:
-            return statement
         if isinstance(params, dict):
             return re.sub(r":([a-zA-Z_][a-zA-Z0-9_]*)", r"%(\1)s", statement)
         return statement.replace("?", "%s")
@@ -77,11 +67,9 @@ class AuditRepository:
         if not params:
             return None
         sql = self._sql(statement, params)
-        if self.is_postgres:
-            with connection.cursor() as cursor:
-                cursor.executemany(sql, params)
-            return None
-        return connection.executemany(sql, params)
+        with connection.cursor() as cursor:
+            cursor.executemany(sql, params)
+        return None
 
     def initialize(self) -> None:
         with self.connect() as connection:
@@ -146,12 +134,9 @@ class AuditRepository:
 
                 CREATE INDEX IF NOT EXISTS idx_findings_audit ON findings(audit_id);
                 """
-            if self.is_postgres:
-                for statement in schema.split(";"):
-                    if statement.strip():
-                        connection.execute(statement)
-            else:
-                connection.executescript(schema)
+            for statement in schema.split(";"):
+                if statement.strip():
+                    connection.execute(statement)
 
     def create_audit(self, request: AuditCreate, crawl_limit: int) -> AuditRecord:
         audit = AuditRecord(
@@ -270,15 +255,13 @@ class AuditRepository:
 
     def claim_next_audit(self) -> AuditRecord | None:
         with self.connect() as connection:
-            if not self.is_postgres:
-                connection.execute("BEGIN IMMEDIATE")
             row = self._execute(connection,
                 """
                 SELECT id FROM audits
                 WHERE status = ?
                 ORDER BY created_at ASC
                 LIMIT 1
-                """ + (" FOR UPDATE SKIP LOCKED" if self.is_postgres else """"""),
+                """ + " FOR UPDATE SKIP LOCKED",
                 (AuditStatus.QUEUED.value,),
             ).fetchone()
             if row is None:

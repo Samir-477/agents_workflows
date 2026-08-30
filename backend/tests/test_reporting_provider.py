@@ -8,7 +8,7 @@ from seo_audit.reporting import ReportWriter
 
 def test_report_writer_builds_selected_groq_model(tmp_path: Path):
     settings = Settings(
-        database_path=tmp_path / "test.sqlite3",
+        report_output_dir=tmp_path / "reports",
         llm_provider="groq",
         llm_model="openai/gpt-oss-20b",
         llm_api_key="test-key",

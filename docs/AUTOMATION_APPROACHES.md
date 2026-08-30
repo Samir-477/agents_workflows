@@ -95,7 +95,7 @@ crawl() -> extract() -> rules() -> score() -> report()
 Save result and mark complete
 ```
 
-The workflow is implemented with ordinary Python functions. A worker runs the audit outside the HTTP request. Initially this could be one process polling queued audit rows in SQLite or PostgreSQL. Celery and a broker can be introduced when distributed workers are genuinely needed.
+The workflow is implemented with ordinary Python functions. A worker runs the audit outside the HTTP request and polls queued audit rows in Supabase Postgres. Celery and a broker can be introduced when distributed workers are genuinely needed.
 
 Celery is a task queue that sends work through a broker to worker processes and can track task state and results. This is useful for horizontal scaling, but it also introduces broker and worker infrastructure that a first local MVP may not need. See the [official Celery introduction](https://docs.celeryq.dev/en/stable/getting-started/introduction.html).
 
@@ -429,7 +429,7 @@ LangGraph workflow
   `-- save_report           normal Python
             |
             v
-SQLite for MVP
+Supabase Postgres
 ```
 
 ### Why this is the best balance
@@ -517,7 +517,7 @@ For the first MVP:
 1. FastAPI inserts an `Audit(status="queued")` row.
 2. A single worker process claims queued audits.
 3. The worker invokes the LangGraph workflow using the audit ID.
-4. Every stage updates audit progress in SQLite.
+4. Every stage updates audit progress in Supabase Postgres.
 5. The frontend polls a status endpoint.
 6. Failed audits remain inspectable and can be retried.
 
@@ -557,7 +557,7 @@ Use this for the MVP:
 - **Crawler and extraction:** framework-neutral Python
 - **Audit rules and scoring:** framework-neutral Python
 - **API:** FastAPI
-- **MVP storage:** SQLite
+- **MVP storage:** Supabase Postgres
 - **MVP execution:** one separate audit worker
 - **Browser rendering:** Playwright only when selected
 - **UI progress:** database-backed polling initially

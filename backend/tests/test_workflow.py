@@ -5,7 +5,7 @@ import pytest
 from seo_audit.config import Settings
 from seo_audit.crawler import CrawlResult
 from seo_audit.models import AuditCreate, AuditStatus, PageRecord
-from seo_audit.storage import AuditRepository
+from memory_repository import MemoryAuditRepository
 from seo_audit.url_safety import ValidatedTarget
 from seo_audit.workflow import build_audit_graph
 
@@ -34,8 +34,8 @@ async def fake_validator(url: str, **_: object) -> ValidatedTarget:
 
 @pytest.mark.asyncio
 async def test_graph_completes_a_queued_audit(tmp_path: Path):
-    settings = Settings(database_path=tmp_path / "audit.sqlite3", crawl_delay_seconds=0)
-    repository = AuditRepository(settings.database_path)
+    settings = Settings(report_output_dir=tmp_path / "reports", crawl_delay_seconds=0)
+    repository = MemoryAuditRepository()
     repository.initialize()
     audit = repository.create_audit(
         AuditCreate(url="https://example.com", business_description="Example business"),

@@ -34,7 +34,7 @@ async def process_one(repository: AuditRepository, graph) -> bool:
 
 async def run_worker(*, once: bool = False) -> None:
     settings = Settings.from_env()
-    repository = AuditRepository(settings.database_path, database_url=settings.database_url)
+    repository = AuditRepository(settings.database_url)
     repository.initialize()
     graph = build_audit_graph(settings, repository)
     while True:

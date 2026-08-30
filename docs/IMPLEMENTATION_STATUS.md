@@ -1,59 +1,42 @@
 # MVP Implementation Status
 
-Last updated: 2026-08-29
+Last updated: 2026-08-30
 
 ## Current deployed flow
 
 ```text
-Next.js (Vercel project 1)
-  -> POST /audits
-  -> queued audit saved in Supabase Postgres
-  -> run page POSTs /audits/{id}/process
-  -> FastAPI function (Vercel project 2) atomically claims the audit
-  -> LangGraph validates, crawls, checks, scores, and writes the report
-  -> every stage persists to Supabase
-  -> run page polls status and publishes the report
+One Vercel project and domain
+  -> Next.js serves the Stellar frontend
+  -> /api/* reaches api/index.py (FastAPI)
+  -> FastAPI imports agent logic from backend/src/
+  -> queued audit and progress persist in Supabase
+  -> frontend polls same-origin API and publishes the report
 ```
 
-SQLite and `seo-audit-worker` remain available for local development. Neither
-is required by the deployed web application.
+The standalone worker remains available for local development and uses Supabase.
 
 ## Implemented product surface
 
-- Dummy login and protected agent workspace.
-- Searchable agent catalogue with one active agent and coming-soon entries.
-- Compact SEO Audit Agent URL form with closed optional context controls.
-- Bounded, same-origin, read-only crawling with URL/network safety checks.
-- Deterministic page extraction, SEO rules, explainable scoring, and optional Groq narrative.
-- Persisted progress stages and friendly failure states.
-- Prioritized report, quick wins, evidence, affected URLs, and limitations.
-- Searchable/paginated history with delete actions.
-- On-demand PDF downloads generated from stored report JSON.
-- PostgreSQL repository mode for Supabase's transaction pooler.
-- Two-project Vercel monorepo structure and Supabase migration.
+- Demo login and protected agent workspace.
+- Searchable agent catalogue with active and coming-soon agents.
+- Compact audit form with closed optional context controls.
+- Responsible bounded crawl, deterministic checks, and optional Groq summary.
+- Persisted progress, prioritized findings, evidence, quick wins, and limitations.
+- Paginated history, deletion, report pages, and PDF downloads.
+- Supabase/Postgres storage in both local and deployed environments.
+- One-project Next.js + FastAPI Vercel deployment boundary.
 
-## Verification
+## Verification baseline
 
-- 17 backend tests pass, including the serverless claim/process endpoint.
-- Python compilation passes.
-- PostgreSQL placeholder translation checks pass.
-- Frontend ESLint, TypeScript, static generation, and production build pass.
-- The deterministic report path works without an LLM key.
-- Robots-blocked audits complete as limited reports without a misleading score.
+- 17 backend tests pass.
+- FastAPI imports and health/docs endpoints pass locally.
+- Frontend lint and production build pass.
+- Deterministic reporting works without an LLM key.
 
 ## Known limitations
 
-- The deployed process is bounded to one Vercel invocation; a durable queue is
-  still recommended before increasing beyond the 20-page MVP crawl.
-- HTTP HTML inspection only; selective browser rendering is not implemented.
+- Processing is bounded to one serverless invocation; larger crawls need a queue.
+- Selective browser rendering is not implemented.
 - Sitemap indexes are not recursively expanded.
-- The rule catalogue and site score remain an MVP, not an industry standard.
-- Dummy login does not provide production user/workspace isolation.
-- Production Supabase connectivity cannot be exercised until a project
-  `DATABASE_URL` is supplied.
-
-## Next recommended slice
-
-Create the Supabase project, apply the migration, add both Vercel projects and
-their environment variables, then run a deployed audit before expanding the
-rule catalogue or authentication model.
+- The score and rule catalogue remain MVP quality.
+- Demo login is not production authentication.
