@@ -7,5 +7,8 @@
       "maxDuration": 300,
       "excludeFiles": "{src/**,node_modules/**,.next/**,docs/**,supabase/**,backend/tests/**,data/**,reports/**,**/__pycache__/**,**/*.pyc}"
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" }
+  ]
 }
