@@ -37,3 +37,6 @@ yarn-error.log*
 
 # Temporary
 tmp/
+
+# Local secret-bearing helper scripts
+scripts/set-vercel-env.sh
