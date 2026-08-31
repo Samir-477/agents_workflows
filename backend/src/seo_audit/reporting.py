@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -21,8 +22,27 @@ from seo_audit.models import (
 
 
 class ReportWriter:
-    def __init__(self, settings: Settings):
+    def __init__(
+        self,
+        settings: Settings,
+        api_key_resolver: Callable[[str, str | None], str | None] | None = None,
+        model_resolver: Callable[[str | None], str | None] | None = None,
+    ):
         self.settings = settings
+        self.api_key_resolver = api_key_resolver
+        self.model_resolver = model_resolver
+
+    def _resolved_api_key(self) -> str | None:
+        if self.api_key_resolver and self.settings.llm_provider:
+            return self.api_key_resolver(
+                self.settings.llm_provider, self.settings.llm_api_key
+            )
+        return self.settings.llm_api_key
+
+    def _resolved_model(self) -> str | None:
+        if self.model_resolver:
+            return self.model_resolver(self.settings.llm_model)
+        return self.settings.llm_model
 
     async def write(
         self,
@@ -33,8 +53,8 @@ class ReportWriter:
         narrative = None
         if (
             self.settings.llm_provider
-            and self.settings.llm_api_key
-            and self.settings.llm_model
+            and self._resolved_api_key()
+            and self._resolved_model()
         ):
             narrative = await self._generate_narrative(audit, pages, findings)
         report = build_report(audit, pages, findings, narrative)
@@ -85,18 +105,20 @@ class ReportWriter:
             return None
 
     def _create_chat_model(self) -> BaseChatModel:
-        if not self.settings.llm_model or not self.settings.llm_api_key:
+        api_key = self._resolved_api_key()
+        model_name = self._resolved_model()
+        if not model_name or not api_key:
             raise ValueError("LLM model and API key must be configured")
         common = {
-            "model": self.settings.llm_model,
+            "model": model_name,
             "temperature": 0,
             "timeout": 45,
             "max_retries": 1,
         }
         if self.settings.llm_provider == "groq":
-            return ChatGroq(api_key=self.settings.llm_api_key, **common)
+            return ChatGroq(api_key=api_key, **common)
         if self.settings.llm_provider == "openai":
-            return ChatOpenAI(api_key=self.settings.llm_api_key, **common)
+            return ChatOpenAI(api_key=api_key, **common)
         raise ValueError(f"Unsupported LLM provider: {self.settings.llm_provider}")
 
 

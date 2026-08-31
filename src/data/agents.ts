@@ -20,6 +20,15 @@ export const agents: AgentDefinition[] = [
     accent: "indigo",
   },
   {
+    slug: "meta-title-description",
+    category: "SEO Agents",
+    name: "Meta Title and Description Generator",
+    description:
+      "Turn natural-language page briefs into measured, intent-matched metadata options with a clear recommendation.",
+    status: "active",
+    accent: "orange",
+  },
+  {
     slug: "schema-markup",
     category: "SEO Agents",
     name: "Schema Markup Agent",

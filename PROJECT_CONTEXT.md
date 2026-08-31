@@ -272,8 +272,73 @@ Next.js + Python layout and deploys as one project from the repository root.
 - `/agents` provides a searchable catalogue with one live SEO Audit Agent and clearly labelled coming-soon placeholders for future agents.
 - The SEO agent page explains the capability, accepts the URL and audit context, submits to FastAPI, starts a bounded processing invocation, polls persisted stages, and publishes the completed structured report in the UI.
 - Audit context remains optional and is available in a closed-by-default form section containing business description, important URLs, audit reason, and page limit.
-- `/agents/history` lists persisted audit runs with URL search, server-side pagination, report/run links, PDF downloads, and confirmation-gated deletion. Production uses Supabase; in the demo-auth MVP this history is workspace-wide rather than user-specific.
+- `/agents/history` is a shared, filterable history for all registered agents. It
+  currently combines SEO audit and metadata-generator runs with search,
+  pagination, result links, agent-aware deletion, and SEO PDF downloads.
+  Production uses Supabase; in the demo-auth MVP this history is workspace-wide
+  rather than user-specific.
 - Completed reports can be downloaded as generated PDF files from the report view or history page.
+
+Decision recorded on 2026-08-31: the second backend workflow is a prompt-first
+Meta Title and Description Generator. This is our project implementation based
+on the supplied product copy and screenshots; it is not a claim about Dual7's
+private implementation.
+
+- The MVP accepts one natural-language prompt, not a URL. A prompt may describe
+  one page or a batch of up to 10 pages. Metadata writing is chunked into groups
+  of three pages to remain practical under current provider token limits.
+- The model first converts the prompt into structured page briefs. Supplied,
+  inferred, and missing keyword context remain explicitly distinguishable.
+- The generator returns exactly four title options and three meta-description
+  options per page, with intent, angle, rationale, and brand guidance.
+- Normal code owns exact character counts, practical length labels, numeric-claim
+  checks, local and cross-page similarity checks, scoring, and recommendations.
+- One bounded repair pass is available when deterministic validation finds
+  invalid or duplicate output. The run fails clearly if no usable title or
+  description remains.
+- Copy generation requires a configured Groq or OpenAI model. Unlike the audit
+  narrative, it has no deterministic copywriting fallback.
+- The current Groq default is `qwen/qwen3.6-27b` in non-thinking, hidden-reasoning
+  mode. The adapter retains compatible reasoning settings for GPT-OSS models.
+  JSON-object mode is used because live tests showed tool-calling and
+  provider-side strict schema modes could fail before Pydantic validation.
+  Exact schemas remain in the prompt and Pydantic still validates every response.
+- Provider requests retry rate limits with server-directed backoff because one
+  run may span parsing, drafting, and deterministic repair calls within a
+  rolling tokens-per-minute window.
+- Preferred character ranges trigger up to two repair passes and affect
+  recommendation scoring. If the provider still misses a preferred range, the
+  closest issue-free option may be returned with a visible warning; unsupported
+  claims and dropped numeric qualifiers remain blocking validation issues.
+- Runs persist in Supabase and expose create, list, retrieve, process, result,
+  retry, and delete endpoints under
+  `/api/agents/meta-title-description/generations`.
+- The generator is active in the agent catalogue. Its Next.js experience now
+  includes the screenshot-inspired landing page, prompt examples, submission,
+  persisted progress, retry/error states, recommended search previews, complete
+  option cards, counts, validation issues, warnings, brand guidance, and copy
+  actions.
+- Metadata runs appear in the shared cross-agent history. Metadata exports and
+  follow-up refinement controls remain deferred.
+- `backend/src/agent_runtime/` is now the shared composition boundary. New agent
+  packages register independently there while keeping their domain models,
+  workflows, validation, and persistence isolated.
+
+Decision recorded on 2026-08-31: provider credentials can be managed from the
+protected `/agents/settings` page.
+
+- The current settings surface exposes Groq only. Groq keys saved through the
+  UI are stored with Supabase Vault; application tables retain only the Vault
+  UUID and a four-character suffix.
+- Settings APIs require the current demo-session cookie, never return full key
+  values, and keep deployment environment variables as a fallback.
+- Agent model clients resolve the current Vault override at run time, so a saved
+  replacement applies to new runs without redeployment or process restart.
+- The active Groq model is also stored in Supabase and resolved at run time.
+  The current allowlist contains Qwen 3.6 27B, Qwen 3.8 27B, GPT-OSS 120B, and
+  GPT-OSS 20B, with production and preview status shown in the UI.
+- The current Groq environment key was migrated into Vault. Production
+  authentication remains required before this demo workspace is multi-user.
 
 Deployment requirement recorded on 2026-08-29: every new product feature must be designed to run in a deployed environment, not only on the local development machine.
 

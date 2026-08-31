@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from seo_audit.models import (
     AuditStatus,
 )
 from seo_audit.pdf_report import build_report_pdf
+from seo_audit.reporting import ReportWriter
 from seo_audit.storage import AuditNotFoundError, AuditRepository
 from seo_audit.url_safety import UnsafeTargetError, normalize_http_url
 from seo_audit.workflow import build_audit_graph
@@ -26,6 +28,8 @@ from seo_audit.workflow import build_audit_graph
 def create_app(
     settings: Settings | None = None,
     repository: AuditRepository | None = None,
+    api_key_resolver: Callable[[str, str | None], str | None] | None = None,
+    model_resolver: Callable[[str | None], str | None] | None = None,
 ) -> FastAPI:
     settings = settings or Settings.from_env()
     repository = repository or AuditRepository(settings.database_url)
@@ -51,8 +55,8 @@ def create_app(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
         allow_origin_regex=settings.cors_origin_regex,
-        allow_credentials=False,
-        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type"],
     )
 
@@ -112,7 +116,17 @@ def create_app(
         claimed = repository.claim_audit(audit_id)
         if claimed is not None:
             try:
-                graph = build_audit_graph(settings, repository)
+                graph = (
+                    build_audit_graph(
+                        settings,
+                        repository,
+                        report_writer=ReportWriter(
+                            settings, api_key_resolver, model_resolver
+                        ),
+                    )
+                    if api_key_resolver
+                    else build_audit_graph(settings, repository)
+                )
                 await graph.ainvoke({"audit_id": audit_id})
             except Exception as exc:
                 repository.update_audit(

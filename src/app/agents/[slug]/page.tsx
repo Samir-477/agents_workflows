@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { AuditForm } from "@/components/audit-form";
 import { CheckIcon } from "@/components/icons";
+import { MetadataAgentPage } from "@/components/metadata-agent-page";
 import { agents, getAgent } from "@/data/agents";
 
 export function generateStaticParams() {
@@ -13,6 +14,10 @@ export default async function AgentPage({ params }: { params: Promise<{ slug: st
   const { slug } = await params;
   const agent = getAgent(slug);
   if (!agent) notFound();
+
+  if (slug === "meta-title-description") {
+    return <MetadataAgentPage />;
+  }
 
   if (agent.status !== "active") {
     return (

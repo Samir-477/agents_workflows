@@ -39,7 +39,11 @@ class Settings:
             raise ValueError(
                 "DATABASE_URL is required. Configure the Supabase Postgres transaction-pooler URL."
             )
-        llm_provider = (os.getenv("SEO_AUDIT_LLM_PROVIDER") or "").strip().lower() or None
+        llm_provider = (
+            os.getenv("AGENT_LLM_PROVIDER")
+            or os.getenv("SEO_AUDIT_LLM_PROVIDER")
+            or ""
+        ).strip().lower() or None
         if llm_provider not in {None, "groq", "openai"}:
             raise ValueError("SEO_AUDIT_LLM_PROVIDER must be 'groq' or 'openai'")
         if llm_provider == "groq":
@@ -79,7 +83,11 @@ class Settings:
                 "SEO-AEO-Audit-Agent/0.1 (+read-only audit)",
             ),
             llm_provider=llm_provider,
-            llm_model=os.getenv("SEO_AUDIT_LLM_MODEL") or None,
+            llm_model=(
+                os.getenv("AGENT_LLM_MODEL")
+                or os.getenv("SEO_AUDIT_LLM_MODEL")
+                or None
+            ),
             llm_api_key=llm_api_key,
             allow_private_networks=os.getenv("SEO_AUDIT_ALLOW_PRIVATE_NETWORKS", "false").lower()
             in {"1", "true", "yes"},

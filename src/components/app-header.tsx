@@ -26,6 +26,12 @@ export function AppHeader() {
           >
             History
           </Link>
+          <Link
+            href="/agents/settings"
+            className="hidden rounded-lg px-3 py-2 text-sm font-medium text-[#5f5f68] hover:bg-[#f6f5f2] hover:text-[#12131a] sm:inline-flex"
+          >
+            Settings
+          </Link>
           <form action="/auth/logout" method="post">
             <button
               type="submit"
