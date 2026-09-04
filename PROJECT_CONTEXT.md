@@ -340,6 +340,69 @@ protected `/agents/settings` page.
 - The current Groq environment key was migrated into Vault. Production
   authentication remains required before this demo workspace is multi-user.
 
+Decision recorded on 2026-09-01: the third persisted workflow is a prompt-first
+Schema Markup Generator. This is our project implementation based on the supplied
+product copy and screenshots; it is not a claim about Dual7's private implementation.
+
+- The MVP accepts a natural-language description of one page and its visible facts;
+  it does not require or crawl a URL.
+- The model interprets the page into a constrained set of supported main types:
+  Organization, LocalBusiness, MedicalBusiness, Product, Article, FAQPage, Event,
+  and SoftwareApplication. It never owns final JSON serialization.
+- Deterministic Python sanitizes properties, adds the schema.org context and main
+  types, composes multi-entity pages into one graph, round-trips the JSON, and
+  produces the ready-to-place script block.
+- Code checks required and useful recommended properties, Product eligibility
+  fields, FAQ visibility, and rating/review visibility. It includes placement scope,
+  missing-property guidance, and the explicit caveat that valid markup does not
+  guarantee enhanced search results.
+- Runs persist in Supabase and expose create, list, retrieve, process, result, retry,
+  and delete endpoints under `/api/agents/schema-markup/generations`.
+- The schema agent is active in the catalogue, has its own screenshot-inspired
+  landing and result experience, and appears as a filter in shared agent history.
+- The supplied schema migration must be applied before production runs. Live-page
+  validation remains a user step through the Rich Results Test; the application
+  validates syntax and deterministic completeness rules but does not claim to
+  reproduce Google's validator.
+- Schema output has an explicit conservative readiness state. Deterministic
+  checks validate nested FAQ, Offer, AggregateRating, address, URL, date, and
+  currency shapes and block high-risk factual values that are not supported by
+  the submitted page description. Syntactically valid output with errors remains
+  available as a clearly labelled draft; only results with zero blocking issues
+  are presented as publish-ready drafts.
+
+Decision recorded on 2026-09-03: the fourth persisted workflow is a Keyword
+Cluster Agent. This is our project implementation based on supplied product copy;
+it is not a claim about Dual7's private implementation.
+
+- The MVP accepts 3 to 500 keyword rows, one per line, with optional comma-, tab-,
+  or semicolon-separated search volumes. Parsing, normalization, duplicate removal,
+  volume handling, coverage validation, slugs, totals, and link compilation are
+  deterministic.
+- Semantic grouping uses a two-pass Groq workflow: bounded batches produce candidate
+  page-level clusters, then one global consolidation pass reconciles the full export
+  into a consistent architecture. The final plan preserves every unique source term.
+- Results contain intent-labelled clusters, primary keywords, page roles and types,
+  suggested titles and URL slugs, explicit reasoning, build priorities, pillar and
+  supporting-page plans, and bidirectional pillar/supporting internal-link guidance.
+- Deterministic quality guardrails split clusters when explicit modifiers reveal
+  conflicting page jobs, such as a generic how-to guide and a pricing page. Model
+  output cannot override this final intent-consistency check.
+- Suggested titles cannot introduce a calendar year unless that year appeared in
+  the submitted keywords. Unsupported ranking, traffic, bounce-rate, conversion,
+  and confirmed-cannibalization claims are softened before results are saved.
+- Priority scores are recalculated by code from page role, intent, keyword coverage,
+  and supplied volume. Each result exposes those factors and a recommendation
+  confidence rather than presenting an unexplained model-generated number.
+- Topic hubs are labelled as candidates when the submitted list is too small or
+  shallow to establish a defensible pillar-and-supporting-page architecture.
+- The UI states assumptions and treats cannibalization as a likely structural risk,
+  not as a confirmed ranking outcome without external search-performance evidence.
+- Runs persist in Supabase and expose create, list, retrieve, process, result, retry,
+  and delete endpoints under `/api/agents/keyword-cluster/generations`.
+- The agent is active in the catalogue, has its own landing, progress and result
+  experience, and participates in shared searchable, paginated history.
+
 Deployment requirement recorded on 2026-08-29: every new product feature must be designed to run in a deployed environment, not only on the local development machine.
 
 - One Vercel project uses Root Directory `.`. Vercel builds Next.js from the

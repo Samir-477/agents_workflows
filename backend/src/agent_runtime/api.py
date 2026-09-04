@@ -14,9 +14,15 @@ from agent_runtime.provider_settings import (
     ModelSelectionUpdate,
 )
 from agent_runtime.registry import AgentRegistration
+from keyword_cluster.api import create_keyword_cluster_router
+from keyword_cluster.generation import KeywordClusterGenerator
+from keyword_cluster.storage import KeywordClusterRepository, MemoryKeywordClusterRepository
 from meta_generator.api import create_metadata_router
 from meta_generator.generation import MetadataGenerator
 from meta_generator.storage import MetadataGenerationRepository
+from schema_generator.api import create_schema_router
+from schema_generator.generation import SchemaInterpreter
+from schema_generator.storage import MemorySchemaGenerationRepository, SchemaGenerationRepository
 from seo_audit.api import create_app as create_seo_app
 from seo_audit.config import Settings
 from seo_audit.storage import AuditRepository
@@ -27,6 +33,10 @@ def create_app(
     audit_repository: AuditRepository | None = None,
     metadata_repository: MetadataGenerationRepository | None = None,
     metadata_generator: MetadataGenerator | None = None,
+    schema_repository: SchemaGenerationRepository | None = None,
+    schema_interpreter: SchemaInterpreter | None = None,
+    keyword_cluster_repository: KeywordClusterRepository | None = None,
+    keyword_cluster_generator: KeywordClusterGenerator | None = None,
     provider_repository: ProviderCredentialRepository | None = None,
 ) -> FastAPI:
     """Compose independently implemented agents into one deployable API."""
@@ -36,12 +46,32 @@ def create_app(
     metadata_repository = metadata_repository or MetadataGenerationRepository(
         settings.database_url
     )
+    schema_repository = schema_repository or (
+        SchemaGenerationRepository(settings.database_url)
+        if settings.database_url
+        else MemorySchemaGenerationRepository()
+    )
+    keyword_cluster_repository = keyword_cluster_repository or (
+        KeywordClusterRepository(settings.database_url)
+        if settings.database_url
+        else MemoryKeywordClusterRepository()
+    )
     provider_repository = provider_repository or (
         ProviderCredentialRepository(settings.database_url)
         if settings.database_url
         else MemoryProviderCredentialRepository()
     )
     metadata_generator = metadata_generator or MetadataGenerator(
+        settings,
+        provider_repository.resolve_api_key,
+        provider_repository.resolve_model,
+    )
+    schema_interpreter = schema_interpreter or SchemaInterpreter(
+        settings,
+        provider_repository.resolve_api_key,
+        provider_repository.resolve_model,
+    )
+    keyword_cluster_generator = keyword_cluster_generator or KeywordClusterGenerator(
         settings,
         provider_repository.resolve_api_key,
         provider_repository.resolve_model,
@@ -62,9 +92,29 @@ def create_app(
                 generator=metadata_generator,
             ),
             initialize=metadata_repository.initialize,
-        )
+        ),
+        AgentRegistration(
+            slug="schema-markup",
+            router=create_schema_router(
+                settings,
+                schema_repository,
+                interpreter=schema_interpreter,
+            ),
+            initialize=schema_repository.initialize,
+        ),
+        AgentRegistration(
+            slug="keyword-cluster",
+            router=create_keyword_cluster_router(
+                settings,
+                keyword_cluster_repository,
+                generator=keyword_cluster_generator,
+            ),
+            initialize=keyword_cluster_repository.initialize,
+        ),
     ]
-    history_service = AgentRunHistoryService(audit_repository, metadata_repository)
+    history_service = AgentRunHistoryService(
+        audit_repository, metadata_repository, schema_repository, keyword_cluster_repository
+    )
 
     def settings_response() -> ProviderSettingsResponse:
         return provider_repository.list_statuses(
@@ -157,6 +207,8 @@ def create_app(
     app.title = "Stellar Agents API"
     app.description = "Persisted workflows for Stellar's specialized agents."
     app.state.metadata_repository = metadata_repository
+    app.state.schema_repository = schema_repository
+    app.state.keyword_cluster_repository = keyword_cluster_repository
     app.state.provider_repository = provider_repository
     app.include_router(shared_router)
     for registration in registrations:

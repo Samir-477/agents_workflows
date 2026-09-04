@@ -75,3 +75,15 @@ export function PlusIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function ClusterIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <circle cx="6" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="18" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="17" cy="18" r="2.5" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="7" cy="17" r="2.5" stroke="currentColor" strokeWidth="1.7" />
+      <path d="m8.4 7 7.1-.7M8 9l7 7M9.4 17.2l5.1.5M6.3 9.5l.4 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}

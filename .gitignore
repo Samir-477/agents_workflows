@@ -13,6 +13,7 @@ __pycache__/
 # Local report artifacts
 /reports/
 /backend/reports/
+/sterling_resort_crawler/
 
 # Next.js
 node_modules/

@@ -34,8 +34,17 @@ export const agents: AgentDefinition[] = [
     name: "Schema Markup Agent",
     description:
       "Generate structured data that matches the visible content and entities on a page.",
-    status: "coming-soon",
+    status: "active",
     accent: "orange",
+  },
+  {
+    slug: "keyword-cluster",
+    category: "SEO Agents",
+    name: "Keyword Cluster Agent",
+    description:
+      "Turn a raw keyword export into semantic clusters, pillar pages, a build order, and an internal-link plan.",
+    status: "active",
+    accent: "indigo",
   },
   {
     slug: "internal-linking",

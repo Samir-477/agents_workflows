@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { AuditForm } from "@/components/audit-form";
 import { CheckIcon } from "@/components/icons";
 import { MetadataAgentPage } from "@/components/metadata-agent-page";
+import { KeywordClusterAgentPage } from "@/components/keyword-cluster-agent-page";
+import { SchemaAgentPage } from "@/components/schema-agent-page";
 import { agents, getAgent } from "@/data/agents";
 
 export function generateStaticParams() {
@@ -17,6 +19,12 @@ export default async function AgentPage({ params }: { params: Promise<{ slug: st
 
   if (slug === "meta-title-description") {
     return <MetadataAgentPage />;
+  }
+  if (slug === "schema-markup") {
+    return <SchemaAgentPage />;
+  }
+  if (slug === "keyword-cluster") {
+    return <KeywordClusterAgentPage />;
   }
 
   if (agent.status !== "active") {
