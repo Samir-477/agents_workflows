@@ -47,4 +47,5 @@ def test_shared_app_registers_audit_and_metadata_agent_routes():
     assert len(settings.json()["model_options"]) == 4
     assert app.title == "Stellar Agents API"
     assert "/api/agents/meta-title-description/generations" in schema["paths"]
+    assert "/api/agents/internal-linking/audits" in schema["paths"]
     assert "/api/agent-runs" in schema["paths"]

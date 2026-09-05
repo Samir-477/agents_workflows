@@ -20,3 +20,74 @@ body {
   outline: 3px solid #2563eb;
   outline-offset: 3px;
 }
+
+/* Run pages mirror the supplied long-form reference pages. */
+.reference-run-page {
+  min-height: 100vh;
+  background: #fff;
+}
+
+.reference-run-inner {
+  width: min(100%, 1680px);
+  margin-inline: auto;
+  padding: 2.75rem 2rem 7rem;
+}
+
+.reference-run-inner article {
+  border-color: #dfdedb;
+  border-radius: 1.25rem;
+  box-shadow: none;
+}
+
+.reference-run-inner table {
+  border-collapse: collapse;
+}
+
+.reference-run-inner thead {
+  background: #f7f6f3;
+}
+
+.reference-run-inner tbody tr {
+  border-color: #e8e6e1;
+}
+
+.reference-run-inner tbody tr:hover {
+  background: #fcfbf9;
+}
+
+.reference-run-inner details > summary {
+  line-height: 1.5;
+}
+
+/* Major result groups follow the reference page rhythm: generous whitespace
+   and a single light divider between content sections. */
+.reference-run-inner > nav + div > section {
+  margin-top: 4rem;
+  border-top: 1px solid #e6e4df;
+  padding-top: 3rem;
+}
+
+.reference-run-inner > nav + div > header + section {
+  margin-top: 2rem;
+  border-top: 0;
+  padding-top: 0;
+}
+
+@media (min-width: 768px) {
+  .reference-run-inner {
+    padding: 3.5rem 4.5rem 8rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .reference-run-inner {
+    padding-inline: 5.5rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .reference-run-inner > nav + div > section {
+    margin-top: 3rem;
+    padding-top: 2.25rem;
+  }
+}

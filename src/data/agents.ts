@@ -52,7 +52,7 @@ export const agents: AgentDefinition[] = [
     name: "Internal Linking Agent",
     description:
       "Find high-value internal linking opportunities and explain exactly where to add them.",
-    status: "coming-soon",
+    status: "active",
     accent: "indigo",
   },
   {
@@ -61,8 +61,16 @@ export const agents: AgentDefinition[] = [
     name: "SEO Content Brief Agent",
     description:
       "Turn a topic and audience into a structured, evidence-led brief a writer can execute.",
-    status: "coming-soon",
+    status: "active",
     accent: "orange",
+  },
+  {
+    slug: "ai-visibility",
+    category: "SEO Agents",
+    name: "AI Visibility Audit Agent",
+    description: "Audit whether public pages are discoverable, machine-readable, entity-clear, and ready to cite.",
+    status: "active",
+    accent: "indigo",
   },
   {
     slug: "accessibility-audit",

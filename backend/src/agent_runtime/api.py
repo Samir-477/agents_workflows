@@ -14,9 +14,17 @@ from agent_runtime.provider_settings import (
     ModelSelectionUpdate,
 )
 from agent_runtime.registry import AgentRegistration
+from ai_visibility.api import create_visibility_router
+from ai_visibility.storage import MemoryVisibilityRepository, VisibilityRepository
+from content_brief.api import create_content_brief_router
+from content_brief.generation import ContentBriefGenerator
+from content_brief.storage import ContentBriefRepository, MemoryContentBriefRepository
 from keyword_cluster.api import create_keyword_cluster_router
 from keyword_cluster.generation import KeywordClusterGenerator
 from keyword_cluster.storage import KeywordClusterRepository, MemoryKeywordClusterRepository
+from internal_linking.api import create_internal_link_router
+from internal_linking.generation import InternalLinkRefiner
+from internal_linking.storage import InternalLinkRepository, MemoryInternalLinkRepository
 from meta_generator.api import create_metadata_router
 from meta_generator.generation import MetadataGenerator
 from meta_generator.storage import MetadataGenerationRepository
@@ -37,6 +45,11 @@ def create_app(
     schema_interpreter: SchemaInterpreter | None = None,
     keyword_cluster_repository: KeywordClusterRepository | None = None,
     keyword_cluster_generator: KeywordClusterGenerator | None = None,
+    internal_link_repository: InternalLinkRepository | None = None,
+    internal_link_refiner: InternalLinkRefiner | None = None,
+    content_brief_repository: ContentBriefRepository | None = None,
+    content_brief_generator: ContentBriefGenerator | None = None,
+    visibility_repository: VisibilityRepository | None = None,
     provider_repository: ProviderCredentialRepository | None = None,
 ) -> FastAPI:
     """Compose independently implemented agents into one deployable API."""
@@ -56,6 +69,20 @@ def create_app(
         if settings.database_url
         else MemoryKeywordClusterRepository()
     )
+    internal_link_repository = internal_link_repository or (
+        InternalLinkRepository(settings.database_url)
+        if settings.database_url
+        else MemoryInternalLinkRepository()
+    )
+    content_brief_repository = content_brief_repository or (
+        ContentBriefRepository(settings.database_url)
+        if settings.database_url
+        else MemoryContentBriefRepository()
+    )
+    visibility_repository = visibility_repository or (
+        VisibilityRepository(settings.database_url)
+        if settings.database_url else MemoryVisibilityRepository()
+    )
     provider_repository = provider_repository or (
         ProviderCredentialRepository(settings.database_url)
         if settings.database_url
@@ -72,6 +99,16 @@ def create_app(
         provider_repository.resolve_model,
     )
     keyword_cluster_generator = keyword_cluster_generator or KeywordClusterGenerator(
+        settings,
+        provider_repository.resolve_api_key,
+        provider_repository.resolve_model,
+    )
+    internal_link_refiner = internal_link_refiner or InternalLinkRefiner(
+        settings,
+        provider_repository.resolve_api_key,
+        provider_repository.resolve_model,
+    )
+    content_brief_generator = content_brief_generator or ContentBriefGenerator(
         settings,
         provider_repository.resolve_api_key,
         provider_repository.resolve_model,
@@ -111,9 +148,34 @@ def create_app(
             ),
             initialize=keyword_cluster_repository.initialize,
         ),
+        AgentRegistration(
+            slug="internal-linking",
+            router=create_internal_link_router(
+                settings,
+                internal_link_repository,
+                refiner=internal_link_refiner,
+            ),
+            initialize=internal_link_repository.initialize,
+        ),
+        AgentRegistration(
+            slug="content-brief",
+            router=create_content_brief_router(
+                settings,
+                content_brief_repository,
+                generator=content_brief_generator,
+            ),
+            initialize=content_brief_repository.initialize,
+        ),
+        AgentRegistration(
+            slug="ai-visibility",
+            router=create_visibility_router(settings, visibility_repository),
+            initialize=visibility_repository.initialize,
+        ),
     ]
     history_service = AgentRunHistoryService(
-        audit_repository, metadata_repository, schema_repository, keyword_cluster_repository
+        audit_repository, metadata_repository, schema_repository,
+        keyword_cluster_repository, internal_link_repository,
+        content_brief_repository, visibility_repository,
     )
 
     def settings_response() -> ProviderSettingsResponse:
@@ -209,6 +271,9 @@ def create_app(
     app.state.metadata_repository = metadata_repository
     app.state.schema_repository = schema_repository
     app.state.keyword_cluster_repository = keyword_cluster_repository
+    app.state.internal_link_repository = internal_link_repository
+    app.state.content_brief_repository = content_brief_repository
+    app.state.visibility_repository = visibility_repository
     app.state.provider_repository = provider_repository
     app.include_router(shared_router)
     for registration in registrations:

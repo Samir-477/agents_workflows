@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -77,6 +77,14 @@ class AuditRecord(BaseModel):
 class LinkRecord(BaseModel):
     url: str
     anchor_text: str = ""
+    placement: Literal["content", "navigation", "footer", "other"] = "other"
+    section_heading: str | None = None
+    context_text: str | None = None
+
+
+class ContentSection(BaseModel):
+    heading: str | None = None
+    text: str
 
 
 class PageRecord(BaseModel):
@@ -95,6 +103,8 @@ class PageRecord(BaseModel):
     h2: list[str] = Field(default_factory=list)
     word_count: int = 0
     internal_links: list[LinkRecord] = Field(default_factory=list)
+    link_occurrences: list[LinkRecord] = Field(default_factory=list)
+    content_sections: list[ContentSection] = Field(default_factory=list)
     images_total: int = 0
     images_missing_alt: int = 0
     schema_types: list[str] = Field(default_factory=list)

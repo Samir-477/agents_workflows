@@ -227,6 +227,22 @@ The first useful version should prioritize trustworthy fundamentals over full fe
 
 ## Current implementation decision and baseline
 
+Decision recorded on 2026-09-05: the seventh persisted workflow is an
+evidence-first AI Visibility Audit Agent. This is our implementation decision,
+informed by the supplied product copy; it is not a claim about Dual7's private
+architecture.
+
+- A bounded same-origin crawl feeds four separately scored dimensions:
+  discoverability, machine readability, entity clarity, and citability.
+- Robots results are presented as declared path-level policies for configured
+  user-agent tokens, not as proof of any provider's entire answer pipeline.
+- Scores use visible weights and rule deductions. Findings retain observation,
+  evidence, confidence, affected URLs, rationale, and remediation guidance.
+- Citability checks are explicitly heuristic. The agent does not claim to
+  measure current off-site mentions, rankings, recommendations, or citations.
+- Runs and full results persist, can be reopened from shared history, retried,
+  and deleted under `/api/agents/ai-visibility/audits`.
+
 Decision recorded on 2026-08-28: the first implementation uses the hybrid described in `docs/AUTOMATION_APPROACHES.md`.
 
 - LangGraph orchestrates explicit audit stages.
@@ -402,6 +418,58 @@ it is not a claim about Dual7's private implementation.
   and delete endpoints under `/api/agents/keyword-cluster/generations`.
 - The agent is active in the catalogue, has its own landing, progress and result
   experience, and participates in shared searchable, paginated history.
+
+Decision recorded on 2026-09-05: the fifth persisted workflow is an Internal
+Linking Agent. This is our project implementation based on supplied product copy;
+it is not a claim about Dual7's private implementation.
+
+- The workflow accepts one public URL, optional business context and important
+  URLs, an audit goal, and a bounded page limit.
+- The shared safe crawler records every internal-link occurrence with placement,
+  nearby section heading, and a bounded source excerpt while preserving the
+  deduplicated link list used by the SEO audit.
+- Deterministic code builds the observed page graph, calculates inbound and
+  contextual-link counts, detects generic anchors, finds missing topical
+  relationships, and owns transparent priority and confidence scoring.
+- A zero-inbound page is only a confirmed orphan when the bounded crawl completed
+  without a coverage limitation. Otherwise it is explicitly an orphan candidate.
+- Optional Groq refinement can draft anchor and placement wording from bounded
+  evidence, but cannot add or change page URLs, existing-link facts, or scores.
+  Deterministic recommendations remain available if model refinement fails.
+- Results contain source and target pages, anchor options, placement evidence,
+  reasoning, score factors, graph summaries, warnings, and crawl limitations.
+- Audits persist in Supabase and expose create, list, retrieve, process, result,
+  retry, and delete endpoints under `/api/agents/internal-linking/audits`.
+- The agent is read-only, active in the catalogue, has dedicated landing,
+  progress and result experiences, and participates in shared paginated history.
+
+Decision recorded on 2026-09-05: the sixth persisted workflow is an SEO Content
+Brief Agent. This is our project implementation based on supplied product copy;
+it is not a claim about Dual7's private implementation.
+
+- Each MVP run creates one writer-ready brief from a required target keyword and
+  audience plus optional secondary terms, angle, business goal, product context,
+  existing page URLs, source notes, and new-versus-rewrite mode.
+- The generated contract includes intent and confidence, reader job, format,
+  tone, word range, introduction guidance, an ordered H2/H3 outline with section
+  jobs and word budgets, coverage, FAQ guidance, internal links, conversion
+  notes, assumptions, and writer checks.
+- Intent, questions, and entity coverage are explicitly inferred recommendations
+  unless evidence is supplied. The MVP does not query live SERPs, search-volume
+  data, or People Also Ask and never presents inferred ideas as measured demand.
+- Internal-link targets must exactly match user-supplied URLs. Calls to action
+  require supplied business or product context. Generated facts, regulations,
+  statistics, and product claims remain writer verification tasks.
+- Deterministic validation owns heading hierarchy, topical alignment, duplicate
+  sections and FAQs, word-budget coherence, internal URL grounding, provenance
+  labels, generic anchors, and unsupported outcome claims. Blocking issues can
+  trigger one bounded model repair pass; any remaining issues produce a clearly
+  labelled review draft rather than a false ready state.
+- Runs persist in Supabase and expose create, list, retrieve, process, result,
+  retry, and delete endpoints under `/api/agents/content-brief/generations`.
+  The agent is active in the catalogue and shared paginated history. One-run
+  cluster briefing is deferred in favor of handing Keyword Cluster outputs into
+  individual brief runs.
 
 Deployment requirement recorded on 2026-08-29: every new product feature must be designed to run in a deployed environment, not only on the local development machine.
 

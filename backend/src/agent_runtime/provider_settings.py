@@ -58,9 +58,13 @@ class ProviderCredentialRepository(PostgresRepository):
 
     def initialize(self) -> None:
         with self.connect() as connection:
-            connection.execute(
-                "CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault"
-            )
+            extension = connection.execute(
+                "SELECT 1 FROM pg_extension WHERE extname = 'supabase_vault'"
+            ).fetchone()
+            if extension is None:
+                connection.execute(
+                    "CREATE EXTENSION supabase_vault WITH SCHEMA vault"
+                )
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS agent_provider_settings (

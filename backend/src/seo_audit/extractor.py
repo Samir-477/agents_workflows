@@ -8,10 +8,11 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 
-from seo_audit.models import LinkRecord, PageRecord
+from seo_audit.models import ContentSection, LinkRecord, PageRecord
 
 
 WHITESPACE = re.compile(r"\s+")
+NON_CONTENT_CONTAINERS = {"header", "nav", "footer", "aside"}
 
 
 def clean_text(value: str | None) -> str | None:
@@ -84,21 +85,40 @@ def extract_page(
 
     scope = urlsplit(scope_origin)
     links: list[LinkRecord] = []
+    link_occurrences: list[LinkRecord] = []
     seen_links: set[str] = set()
     for anchor in soup.find_all("a", href=True):
         url = canonicalize_discovered_url(final_url, str(anchor["href"]))
-        if not url or url in seen_links:
+        if not url:
             continue
         parsed = urlsplit(url)
         if parsed.scheme != scope.scheme or parsed.netloc.lower() != scope.netloc.lower():
             continue
-        seen_links.add(url)
-        links.append(
-            LinkRecord(
-                url=url,
-                anchor_text=clean_text(anchor.get_text(" ", strip=True)) or "",
-            )
+        container = anchor.find_parent(["nav", "header", "footer", "aside", "main", "article"])
+        container_name = container.name if container else None
+        if container_name in {"nav", "header", "aside"}:
+            placement = "navigation"
+        elif container_name == "footer":
+            placement = "footer"
+        elif container_name in {"main", "article"} or anchor.find_parent(["p", "li"]):
+            placement = "content"
+        else:
+            placement = "other"
+        context_container = anchor.find_parent(["p", "li"])
+        context_text = clean_text(context_container.get_text(" ", strip=True)) if context_container else None
+        previous_heading = anchor.find_previous(["h1", "h2", "h3"])
+        section_heading = clean_text(previous_heading.get_text(" ", strip=True)) if previous_heading else None
+        record = LinkRecord(
+            url=url,
+            anchor_text=clean_text(anchor.get_text(" ", strip=True)) or "",
+            placement=placement,
+            section_heading=section_heading,
+            context_text=context_text[:500] if context_text else None,
         )
+        link_occurrences.append(record)
+        if url not in seen_links:
+            seen_links.add(url)
+            links.append(record)
 
     images = soup.find_all("img")
     missing_alt = sum(
@@ -113,6 +133,30 @@ def extract_page(
         except (json.JSONDecodeError, TypeError):
             continue
         schema_types.extend(_collect_schema_types(payload))
+
+    content_sections: list[ContentSection] = []
+    active_heading: str | None = None
+    seen_section_text: set[str] = set()
+    total_section_characters = 0
+    content_root = soup.find("main") or soup.find("article") or soup.body or soup
+    for tag in content_root.find_all(["h1", "h2", "h3", "p", "li"]):
+        if tag.find_parent(list(NON_CONTENT_CONTAINERS)):
+            continue
+        text = clean_text(tag.get_text(" ", strip=True))
+        if not text:
+            continue
+        if tag.name in {"h1", "h2", "h3"}:
+            active_heading = text[:240]
+            continue
+        normalized = text.casefold()
+        if normalized in seen_section_text or len(text) < 35:
+            continue
+        clipped = text[:700]
+        content_sections.append(ContentSection(heading=active_heading, text=clipped))
+        seen_section_text.add(normalized)
+        total_section_characters += len(clipped)
+        if len(content_sections) >= 40 or total_section_characters >= 12_000:
+            break
 
     for tag in soup(["script", "style", "noscript", "svg", "template"]):
         tag.decompose()
@@ -134,6 +178,8 @@ def extract_page(
         h2=headings["h2"],
         word_count=len(words),
         internal_links=links,
+        link_occurrences=link_occurrences,
+        content_sections=content_sections,
         images_total=len(images),
         images_missing_alt=missing_alt,
         schema_types=list(dict.fromkeys(schema_types)),

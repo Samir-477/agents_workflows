@@ -9,6 +9,9 @@ import { getAgentRunHistory, type AgentFilter, type AgentRunSummary } from "@/li
 import { deleteMetadataGeneration } from "@/lib/metadata-api";
 import { deleteSchemaGeneration } from "@/lib/schema-api";
 import { deleteKeywordClusterGeneration } from "@/lib/keyword-cluster-api";
+import { deleteInternalLinkAudit } from "@/lib/internal-linking-api";
+import { deleteContentBrief } from "@/lib/content-brief-api";
+import { deleteVisibilityAudit } from "@/lib/ai-visibility-api";
 
 const PAGE_SIZE = 10;
 
@@ -22,6 +25,9 @@ function agentStyle(slug: string): string {
   if (slug === "seo-audit") return "bg-[#eef6ff] text-[#376b9d]";
   if (slug === "schema-markup") return "bg-[#f1efff] text-[#4b3fca]";
   if (slug === "keyword-cluster") return "bg-[#eaf7f1] text-[#267257]";
+  if (slug === "internal-linking") return "bg-[#f2f0ff] text-[#4b3fca]";
+  if (slug === "content-brief") return "bg-[#fff1ed] text-[#bd4a33]";
+  if (slug === "ai-visibility") return "bg-[#eef0ff] text-[#4034bd]";
   return "bg-[#fff1ed] text-[#bd4a33]";
 }
 
@@ -29,6 +35,9 @@ function runHref(item: AgentRunSummary): string {
   if (item.agent_slug === "seo-audit") return `/agents/seo-audit/runs/${item.id}`;
   if (item.agent_slug === "schema-markup") return `/agents/schema-markup/runs/${item.id}`;
   if (item.agent_slug === "keyword-cluster") return `/agents/keyword-cluster/runs/${item.id}`;
+  if (item.agent_slug === "internal-linking") return `/agents/internal-linking/runs/${item.id}`;
+  if (item.agent_slug === "content-brief") return `/agents/content-brief/runs/${item.id}`;
+  if (item.agent_slug === "ai-visibility") return `/agents/ai-visibility/runs/${item.id}`;
   return `/agents/meta-title-description/runs/${item.id}`;
 }
 
@@ -69,6 +78,9 @@ export function AuditHistory() {
       if (item.agent_slug === "seo-audit") await deleteAudit(item.id);
       else if (item.agent_slug === "schema-markup") await deleteSchemaGeneration(item.id);
       else if (item.agent_slug === "keyword-cluster") await deleteKeywordClusterGeneration(item.id);
+      else if (item.agent_slug === "internal-linking") await deleteInternalLinkAudit(item.id);
+      else if (item.agent_slug === "content-brief") await deleteContentBrief(item.id);
+      else if (item.agent_slug === "ai-visibility") await deleteVisibilityAudit(item.id);
       else await deleteMetadataGeneration(item.id);
       const nextPage = runs.length === 1 && page > 1 ? page - 1 : page;
       setPage(nextPage);
@@ -102,6 +114,9 @@ export function AuditHistory() {
             <option value="meta-title-description">Meta Title & Description</option>
             <option value="schema-markup">Schema Markup Generator</option>
             <option value="keyword-cluster">Keyword Cluster Agent</option>
+            <option value="internal-linking">Internal Linking Agent</option>
+            <option value="content-brief">SEO Content Brief Agent</option>
+            <option value="ai-visibility">AI Visibility Audit Agent</option>
           </select>
           <span className="self-center text-xs text-[#85848b] sm:text-right">{total} saved run{total === 1 ? "" : "s"}</span>
         </div>

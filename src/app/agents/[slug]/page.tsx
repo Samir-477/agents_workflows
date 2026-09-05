@@ -6,6 +6,9 @@ import { CheckIcon } from "@/components/icons";
 import { MetadataAgentPage } from "@/components/metadata-agent-page";
 import { KeywordClusterAgentPage } from "@/components/keyword-cluster-agent-page";
 import { SchemaAgentPage } from "@/components/schema-agent-page";
+import { InternalLinkingAgentPage } from "@/components/internal-linking-agent-page";
+import { ContentBriefAgentPage } from "@/components/content-brief-agent-page";
+import { AIVisibilityAgentPage } from "@/components/ai-visibility-agent-page";
 import { agents, getAgent } from "@/data/agents";
 
 export function generateStaticParams() {
@@ -25,6 +28,15 @@ export default async function AgentPage({ params }: { params: Promise<{ slug: st
   }
   if (slug === "keyword-cluster") {
     return <KeywordClusterAgentPage />;
+  }
+  if (slug === "internal-linking") {
+    return <InternalLinkingAgentPage />;
+  }
+  if (slug === "content-brief") {
+    return <ContentBriefAgentPage />;
+  }
+  if (slug === "ai-visibility") {
+    return <AIVisibilityAgentPage />;
   }
 
   if (agent.status !== "active") {

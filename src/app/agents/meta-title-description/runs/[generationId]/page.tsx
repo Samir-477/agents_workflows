@@ -9,7 +9,7 @@ export default async function MetadataRunPage({
 }) {
   const { generationId } = await params;
   return (
-    <main className="mx-auto max-w-[1280px] px-5 py-10 sm:px-8 sm:py-12">
+    <main className="reference-run-page"><div className="reference-run-inner">
       <nav aria-label="Breadcrumb" className="mb-8 text-sm text-[#777680]">
         <Link href="/agents" className="hover:text-[#e94320]">Agents</Link>
         <span className="mx-2" aria-hidden="true">›</span>
@@ -18,6 +18,6 @@ export default async function MetadataRunPage({
         <span>Run</span>
       </nav>
       <MetadataRun generationId={generationId} />
-    </main>
+    </div></main>
   );
 }

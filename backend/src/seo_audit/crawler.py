@@ -21,6 +21,10 @@ class CrawlResult:
     pages: list[PageRecord]
     origin: str
     warnings: list[str] = field(default_factory=list)
+    discovered_urls: list[str] = field(default_factory=list)
+    sitemap_urls: list[str] = field(default_factory=list)
+    coverage_complete: bool = False
+    robots_txt: str | None = None
 
 
 class CrawlError(RuntimeError):
@@ -52,7 +56,7 @@ class SiteCrawler:
                     "Wait a few minutes before retrying."
                 )
             first_origin = _origin(first_url)
-            robots, sitemap_urls = await self._load_robots_and_sitemaps(
+            robots, sitemap_urls, robots_txt = await self._load_robots_and_sitemaps(
                 client, first_origin, warnings
             )
 
@@ -125,9 +129,14 @@ class SiteCrawler:
             warnings.append(
                 f"robots.txt disallowed the redirected start URL: {first_url}"
             )
-        if len(pages) >= limit and queue:
+        limit_reached = len(pages) >= limit and bool(queue)
+        if limit_reached:
             warnings.append(
                 f"The crawl limit of {limit} pages was reached; findings describe a representative sample, not the entire site."
+            )
+        if not sitemap_urls:
+            warnings.append(
+                "No sitemap page inventory was available; site-wide orphan detection is limited to discovered pages."
             )
         if not pages and not start_url_blocked:
             raise CrawlError("No crawlable HTML pages were found")
@@ -135,6 +144,16 @@ class SiteCrawler:
             pages=pages,
             origin=first_origin,
             warnings=list(dict.fromkeys(warnings)),
+            discovered_urls=list(dict.fromkeys([*seen, *(url for url, _ in queue)])),
+            sitemap_urls=sitemap_urls,
+            coverage_complete=(
+                bool(sitemap_urls)
+                and {canonicalize_discovered_url(first_url, url) for url in sitemap_urls}.issubset(seen)
+                and not limit_reached
+                and not robots_blocked_count
+                and not any(page.fetch_error for page in pages)
+            ),
+            robots_txt=robots_txt,
         )
 
     def request_headers(self) -> dict[str, str]:
@@ -166,13 +185,15 @@ class SiteCrawler:
         client: httpx.AsyncClient,
         origin: str,
         warnings: list[str],
-    ) -> tuple[RobotFileParser | None, list[str]]:
+    ) -> tuple[RobotFileParser | None, list[str], str | None]:
         robots_url = f"{origin}/robots.txt"
         parser: RobotFileParser | None = None
         declared_sitemaps: list[str] = []
+        robots_txt: str | None = None
         try:
             response, _ = await self._fetch(client, robots_url)
             if response.status_code == 200:
+                robots_txt = response.text[:100_000]
                 parser = RobotFileParser()
                 parser.set_url(robots_url)
                 parser.parse(response.text.splitlines())
@@ -195,7 +216,7 @@ class SiteCrawler:
                 discovered.extend(_parse_sitemap(response.text, final_url, origin))
             except (httpx.HTTPError, UnsafeTargetError, CrawlError, ET.ParseError):
                 continue
-        return parser, list(dict.fromkeys(discovered))
+        return parser, list(dict.fromkeys(discovered)), robots_txt
 
 
 def _origin(url: str) -> str:
