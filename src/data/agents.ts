@@ -11,6 +11,29 @@ export interface AgentDefinition {
 
 export const agents: AgentDefinition[] = [
   {
+    slug: "content-optimizer",
+    category: "Content Agents",
+    name: "SEO Content Optimizer",
+    description:
+      "Review existing content against its intent, structure, evidence and optional saved SERP research or brief.",
+    status: "active",
+    accent: "orange",
+  },
+  {
+    slug: "serp-competitor",
+    category: "SEO Agents",
+    name: "SERP & Competitor Analysis Agent",
+    description:
+      "Inspect a live Google result sample and compare the visible structure of ranking pages with source-backed evidence.",
+    status: "active",
+    accent: "indigo",
+  },
+  {
+    slug: "local-seo", category: "SEO Agents", name: "Local SEO Page Generator",
+    description: "Draft grounded location pages with local FAQs, business details, schema suggestions and a human review checklist.",
+    status: "active", accent: "orange",
+  },
+  {
     slug: "seo-audit",
     category: "SEO Agents",
     name: "SEO Audit Agent",

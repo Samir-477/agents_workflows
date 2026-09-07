@@ -21,6 +21,7 @@ class ContentBriefWorkflowState(TypedDict, total=False):
     draft: ContentBriefDraft
     result: ContentBriefResult
     repair_instructions: list[str]
+    degradations: list[str]
     error: str
 
 
@@ -50,9 +51,9 @@ def build_content_brief_graph(
         )
         try:
             run = repository.get_generation(state["generation_id"])
-            draft = await generator.generate(run.request)
+            draft, degradations = await generator.generate(run.request)
             repository.save_draft(run.id, draft)
-            return {"draft": draft}
+            return {"draft": draft, "degradations": degradations}
         except Exception as exc:
             return {"error": str(exc)}
 
@@ -63,7 +64,9 @@ def build_content_brief_graph(
         )
         try:
             run = repository.get_generation(state["generation_id"])
-            outcome = validate_brief(run.id, run.request, state["draft"])
+            outcome = validate_brief(
+                run.id, run.request, state["draft"], state.get("degradations")
+            )
             return {
                 "draft": outcome.result.brief,
                 "result": outcome.result,
@@ -79,16 +82,17 @@ def build_content_brief_graph(
         )
         try:
             run = repository.get_generation(state["generation_id"])
-            repaired = await generator.generate(
+            repaired, degradations = await generator.generate(
                 run.request,
                 repair_instructions=state["repair_instructions"],
                 previous_draft=state["draft"],
             )
             repository.save_draft(run.id, repaired)
-            outcome = validate_brief(run.id, run.request, repaired)
+            outcome = validate_brief(run.id, run.request, repaired, degradations)
             return {
                 "draft": outcome.result.brief,
                 "result": outcome.result,
+                "degradations": degradations,
                 "repair_instructions": [],
             }
         except Exception as exc:

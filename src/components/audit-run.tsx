@@ -76,9 +76,10 @@ function AuditProgress({ audit }: { audit: AuditResponse | null }) {
 }
 
 function AuditResults({ report }: { report: AuditReport }) {
+  const assessed = report.site_score !== null;
   const score = report.site_score ?? 0;
-  const scoreLabel = score >= 80 ? "Strong" : score >= 60 ? "Needs attention" : "Needs work";
-  const scoreColor = score >= 80 ? "#2f8f68" : score >= 60 ? "#e39a2d" : "#e5523a";
+  const scoreLabel = !assessed ? "Not assessed" : score >= 80 ? "Strong" : score >= 60 ? "Needs attention" : "Needs work";
+  const scoreColor = !assessed ? "#85848b" : score >= 80 ? "#2f8f68" : score >= 60 ? "#e39a2d" : "#e5523a";
   return (
     <div>
       <header className="flex flex-wrap items-start justify-between gap-5 border-b border-[#e3e1dc] pb-7">
@@ -96,10 +97,10 @@ function AuditResults({ report }: { report: AuditReport }) {
       <section aria-label="Audit overview" className="mt-8 overflow-hidden rounded-[20px] border border-[#dfdedb] bg-white">
         <div className="grid gap-7 p-6 sm:p-8 lg:grid-cols-[180px_1fr] lg:items-center">
           <div className="flex flex-col items-center lg:border-r lg:border-[#eceae6] lg:pr-7">
-            <div className="relative flex h-32 w-32 items-center justify-center rounded-full" style={{ background: `conic-gradient(${scoreColor} ${score * 3.6}deg, #eeece7 0deg)` }}>
+            <div className="relative flex h-32 w-32 items-center justify-center rounded-full" style={{ background: assessed ? `conic-gradient(${scoreColor} ${score * 3.6}deg, #eeece7 0deg)` : "#eeece7" }}>
               <div className="flex h-[108px] w-[108px] flex-col items-center justify-center rounded-full bg-white">
                 <strong className="text-4xl font-semibold tracking-[-0.06em] text-[#171820]">{report.site_score ?? "—"}</strong>
-                <span className="text-[11px] text-[#85848b]">out of 100</span>
+                <span className="text-[11px] text-[#85848b]">{assessed ? "out of 100" : "no page evidence"}</span>
               </div>
             </div>
             <span className="mt-3 text-sm font-semibold" style={{ color: scoreColor }}>{scoreLabel}</span>

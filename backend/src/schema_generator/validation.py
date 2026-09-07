@@ -67,12 +67,35 @@ def _fact_is_supported(key: str, value: Any, source: str) -> bool:
     folded = source.casefold()
     if key == "availability":
         marker = str(value).rsplit("/", 1)[-1].casefold()
-        phrases = {
-            "instock": ("in stock", "available"),
-            "outofstock": ("out of stock", "sold out", "unavailable"),
-            "preorder": ("preorder", "pre-order"),
+        normalized = re.sub(r"[^a-z0-9]+", " ", folded).strip()
+        if marker == "instock":
+            negated_available = re.search(
+                r"\b(?:not|never|no longer)(?:\s+\w+){0,2}\s+available\b|\bunavailable\b",
+                normalized,
+            )
+            negated_stock = re.search(
+                r"\b(?:not|never|no longer)(?:\s+\w+){0,2}\s+in stock\b|\bout of stock\b",
+                normalized,
+            )
+            in_stock = bool(re.search(r"\bin stock\b", normalized)) and not negated_stock
+            available = bool(re.search(r"\bavailable\b", normalized)) and not negated_available
+            offered_for_preorder = bool(
+                re.search(r"\bavailable(?:\s+\w+){0,2}\s+pre\s*order\b", normalized)
+            )
+            return in_stock or (available and not offered_for_preorder)
+        availability_patterns = {
+            "outofstock": (
+                r"\bout of stock\b",
+                r"\bsold out\b",
+                r"\bunavailable\b",
+                r"\bnot available\b",
+            ),
+            "preorder": (r"\bpre\s*order\b",),
         }
-        return any(item in folded for item in phrases.get(marker, (marker,)))
+        return any(
+            re.search(pattern, normalized)
+            for pattern in availability_patterns.get(marker, (rf"\b{re.escape(marker)}\b",))
+        )
     if key == "priceCurrency":
         currency = str(value).upper()
         return any(marker.casefold() in folded for marker in _CURRENCY_MARKERS.get(currency, (currency,)))

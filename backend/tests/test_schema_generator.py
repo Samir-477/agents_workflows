@@ -95,6 +95,37 @@ def test_compiler_accepts_supported_price_currency_and_availability():
     assert result.publish_ready is True
 
 
+@pytest.mark.parametrize(
+    ("schema_value", "source", "supported"),
+    [
+        ("https://schema.org/InStock", "The candle is in stock.", True),
+        ("https://schema.org/InStock", "The candle is available today.", True),
+        ("https://schema.org/InStock", "The candle is unavailable.", False),
+        ("https://schema.org/InStock", "The candle is not available.", False),
+        ("https://schema.org/InStock", "The candle is not currently available.", False),
+        ("https://schema.org/InStock", "The candle is not in stock.", False),
+        ("https://schema.org/OutOfStock", "The candle is out of stock.", True),
+        ("https://schema.org/OutOfStock", "The candle is unavailable.", True),
+        ("https://schema.org/PreOrder", "The candle is available for preorder.", True),
+    ],
+)
+def test_compiler_grounds_availability_without_substring_or_negation_errors(
+    schema_value, source, supported
+):
+    brief = product_brief()
+    brief.entities[0].properties["offers"]["availability"] = schema_value
+    result = compile_schema(
+        "schema-availability-grounding",
+        brief,
+        source_prompt=f"Cedar candle costs £24 GBP. {source}",
+    )
+    unsupported = [
+        issue for issue in result.blocks[0].issues
+        if issue.code == "unsupported-source-fact" and "availability" in issue.message
+    ]
+    assert bool(unsupported) is not supported
+
+
 def test_compiler_validates_article_url_and_date_formats():
     brief = ParsedSchemaBrief(
         page_name="News article",

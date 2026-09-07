@@ -58,6 +58,31 @@ def test_validation_keeps_grounded_links_and_removes_invented_links():
     assert outcome.result.ready_for_handoff is False
 
 
+def test_validation_corrects_unsupported_provenance_labels_deterministically():
+    request = ContentBriefCreate(
+        target_keyword="remote team onboarding checklist",
+        audience="HR managers",
+    )
+    draft = valid_draft(
+        coverage=[
+            {"name": "remote team onboarding checklist", "item_type": "topic", "why_include": "This is the supplied target topic.", "source": "provided"},
+            {"name": "invented benchmark", "item_type": "concept", "why_include": "This was proposed by the model.", "source": "provided"},
+            {"name": "manager check-ins", "item_type": "concept", "why_include": "This is a useful inferred topic.", "source": "inferred"},
+        ],
+        faqs=[
+            {"question": "How long should remote onboarding take?", "answer_guidance": "Explain that timing varies.", "source": "provided"},
+        ],
+    )
+    outcome = validate_brief("brief-provenance", request, draft)
+    coverage = {item.name: item.source for item in outcome.result.brief.coverage}
+    assert coverage["remote team onboarding checklist"] == "provided"
+    assert coverage["invented benchmark"] == "inferred"
+    assert outcome.result.brief.faqs[0].source == "inferred"
+    assert {issue.code for issue in outcome.result.issues} >= {
+        "mislabelled-source", "mislabelled-faq-source"
+    }
+
+
 class FakeGenerator:
     def __init__(self):
         self.calls = 0
@@ -69,10 +94,10 @@ class FakeGenerator:
                 {"heading_level": "H3", "heading": "Details", "purpose": "This starts at the wrong heading level for testing.", "talking_points": ["One point"], "questions_answered": [], "suggested_words": 400},
                 {"heading_level": "H2", "heading": "Remote team onboarding checklist", "purpose": "Give the reader the full sequence for onboarding.", "talking_points": ["Sequence"], "questions_answered": [], "suggested_words": 400},
                 {"heading_level": "H2", "heading": "Final review", "purpose": "Close the process with a structured review step.", "talking_points": ["Review"], "questions_answered": [], "suggested_words": 400},
-            ])
+            ]), []
         assert repair_instructions
         assert previous_draft
-        return valid_draft()
+        return valid_draft(), []
 
 
 def test_api_runs_one_repair_pass_and_persists_writer_ready_result():
@@ -109,7 +134,7 @@ class FailedRepairGenerator:
             {"heading_level": "H3", "heading": "Details", "purpose": "This starts at the wrong heading level for testing.", "talking_points": ["One point"], "questions_answered": [], "suggested_words": 400},
             {"heading_level": "H2", "heading": "Remote team onboarding checklist", "purpose": "Give the reader the complete onboarding sequence.", "talking_points": ["Sequence"], "questions_answered": [], "suggested_words": 400},
             {"heading_level": "H2", "heading": "Final review", "purpose": "Close the process with a structured review step.", "talking_points": ["Review"], "questions_answered": [], "suggested_words": 400},
-        ])
+        ]), []
 
 
 def test_failed_optional_repair_saves_review_draft_instead_of_failing_run():
@@ -126,3 +151,31 @@ def test_failed_optional_repair_saves_review_draft_instead_of_failing_run():
     assert processed.json()["generation"]["status"] == "complete"
     assert processed.json()["generation"]["result"]["ready_for_handoff"] is False
     assert "optional repair pass" in processed.json()["generation"]["result"]["warnings"][0]
+
+
+class DegradedGenerator:
+    """Stands in for a provider whose response was truncated into the fallback path."""
+
+    async def generate(self, request, *, repair_instructions=None, previous_draft=None):
+        return valid_draft(), ["A deterministic skeleton replaced the truncated provider response."]
+
+
+def test_degraded_generation_is_never_presented_as_a_ready_brief():
+    repository = MemoryContentBriefRepository()
+    app = FastAPI()
+    app.include_router(create_content_brief_router(Settings(), repository, generator=DegradedGenerator()))
+    with TestClient(app) as client:
+        created = client.post("/api/agents/content-brief/generations", json={
+            "target_keyword": "remote team onboarding checklist",
+            "audience": "HR managers",
+        }).json()
+        generation_id = created["generation"]["id"]
+        processed = client.post(f"/api/agents/content-brief/generations/{generation_id}/process")
+
+    result = processed.json()["generation"]["result"]
+    # A skeleton satisfies every structural rule, so structural cleanliness alone
+    # must not earn a ready state or a high score.
+    assert result["ready_for_handoff"] is False
+    assert result["quality_score"] <= 40
+    assert result["degradations"]
+    assert any(issue["code"] == "degraded-generation" for issue in result["issues"])

@@ -5,7 +5,6 @@ import xml.etree.ElementTree as ET
 from collections import deque
 from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlsplit
-from urllib.robotparser import RobotFileParser
 
 import httpx
 
@@ -13,6 +12,7 @@ from seo_audit.config import Settings
 from seo_audit.extractor import canonicalize_discovered_url, extract_page
 from seo_audit.models import PageRecord
 from seo_audit.page_types import representative_url_order
+from seo_audit.robots import RobotsPolicy
 from seo_audit.url_safety import UnsafeTargetError, validate_public_target
 
 
@@ -36,6 +36,16 @@ class SiteCrawler:
         self.settings = settings
 
     async def crawl(self, audit_id: str, start_url: str, limit: int) -> CrawlResult:
+        try:
+            async with asyncio.timeout(self.settings.crawl_timeout_seconds):
+                return await self._crawl_bounded(audit_id, start_url, limit)
+        except TimeoutError as exc:
+            raise CrawlError(
+                f"The crawl exceeded its {self.settings.crawl_timeout_seconds:g}-second time budget. "
+                "Retry with a lower page limit or when the site responds faster."
+            ) from exc
+
+    async def _crawl_bounded(self, audit_id: str, start_url: str, limit: int) -> CrawlResult:
         validated = await validate_public_target(
             start_url, allow_private_networks=self.settings.allow_private_networks
         )
@@ -67,6 +77,7 @@ class SiteCrawler:
                 queue.append((sitemap_url, 1))
 
             seen: set[str] = set()
+            crawled_final_urls: set[str] = set()
             pages: list[PageRecord] = []
             prefetched = {first_url: first_response}
             robots_blocked_count = 0
@@ -77,9 +88,7 @@ class SiteCrawler:
                 if requested_url in seen or _origin(requested_url) != first_origin:
                     continue
                 seen.add(requested_url)
-                if robots is not None and not robots.can_fetch(
-                    self.settings.user_agent, requested_url
-                ):
+                if not robots.can_fetch(requested_url, self.settings.user_agent):
                     robots_blocked_count += 1
                     start_url_blocked = start_url_blocked or requested_url == first_url
                     continue
@@ -87,10 +96,19 @@ class SiteCrawler:
                     response = prefetched.pop(requested_url, None)
                     final_url = requested_url
                     if response is None:
-                        response, final_url = await self._fetch(client, requested_url)
+                        response, final_url = await self._fetch(
+                            client, requested_url, allowed_origin=first_origin
+                        )
                     content_type = response.headers.get("content-type", "").split(";", 1)[0]
                     if "text/html" not in content_type.lower():
                         continue
+                    # Two requested URLs can resolve to one page through redirects or a
+                    # trailing slash. Recording both would make the page a duplicate of
+                    # itself in every cross-page comparison, so keep the first only.
+                    if final_url in crawled_final_urls:
+                        seen.add(final_url)
+                        continue
+                    crawled_final_urls.add(final_url)
                     page = extract_page(
                         audit_id=audit_id,
                         requested_url=requested_url,
@@ -164,17 +182,44 @@ class SiteCrawler:
         }
 
     async def _fetch(
-        self, client: httpx.AsyncClient, url: str, max_redirects: int = 5
+        self,
+        client: httpx.AsyncClient,
+        url: str,
+        max_redirects: int = 5,
+        allowed_origin: str | None = None,
     ) -> tuple[httpx.Response, str]:
         current = url
         for _ in range(max_redirects + 1):
             validated = await validate_public_target(
                 current, allow_private_networks=self.settings.allow_private_networks
             )
-            response = await client.get(validated.url, follow_redirects=False)
+            if allowed_origin and validated.origin != allowed_origin:
+                raise CrawlError(f"A redirect left the settled audit origin: {validated.origin}")
+            request = client.build_request("GET", validated.url)
+            response = await client.send(request, follow_redirects=False, stream=True)
             if response.status_code not in {301, 302, 303, 307, 308}:
-                return response, validated.url
+                declared_length = response.headers.get("content-length")
+                if declared_length and declared_length.isdigit() and int(declared_length) > self.settings.maximum_response_bytes:
+                    await response.aclose()
+                    raise CrawlError(
+                        f"Response exceeded the {self.settings.maximum_response_bytes}-byte limit: {validated.url}"
+                    )
+                content = bytearray()
+                async for chunk in response.aiter_bytes():
+                    content.extend(chunk)
+                    if len(content) > self.settings.maximum_response_bytes:
+                        await response.aclose()
+                        raise CrawlError(
+                            f"Response exceeded the {self.settings.maximum_response_bytes}-byte limit: {validated.url}"
+                        )
+                status_code = response.status_code
+                headers = response.headers
+                await response.aclose()
+                return httpx.Response(
+                    status_code, headers=headers, content=bytes(content), request=request
+                ), validated.url
             location = response.headers.get("location")
+            await response.aclose()
             if not location:
                 return response, validated.url
             current = urljoin(validated.url, location)
@@ -185,38 +230,63 @@ class SiteCrawler:
         client: httpx.AsyncClient,
         origin: str,
         warnings: list[str],
-    ) -> tuple[RobotFileParser | None, list[str], str | None]:
+    ) -> tuple[RobotsPolicy, list[str], str | None]:
         robots_url = f"{origin}/robots.txt"
-        parser: RobotFileParser | None = None
-        declared_sitemaps: list[str] = []
+        policy = RobotsPolicy.parse(None)
         robots_txt: str | None = None
         try:
-            response, _ = await self._fetch(client, robots_url)
+            response, _ = await self._fetch(client, robots_url, allowed_origin=origin)
             if response.status_code == 200:
                 robots_txt = response.text[:100_000]
-                parser = RobotFileParser()
-                parser.set_url(robots_url)
-                parser.parse(response.text.splitlines())
-                for line in response.text.splitlines():
-                    key, separator, value = line.partition(":")
-                    if separator and key.strip().lower() == "sitemap":
-                        declared_sitemaps.append(value.strip())
+                policy = RobotsPolicy.parse(response.text)
+                if not policy.declared:
+                    warnings.append(
+                        "robots.txt was served but could not be parsed; the crawl proceeded "
+                        "as if no rules were declared."
+                    )
             elif response.status_code >= 400:
                 warnings.append(f"robots.txt returned HTTP {response.status_code}")
         except (httpx.HTTPError, UnsafeTargetError, CrawlError) as exc:
             warnings.append(f"robots.txt could not be checked: {exc}")
 
+        declared_sitemaps = [
+            url for url in policy.sitemaps() if _origin(url) == origin
+        ]
         sitemap_candidates = declared_sitemaps or [f"{origin}/sitemap.xml"]
         discovered: list[str] = []
+        expanded_index = False
+        # A declared sitemap is often a <sitemapindex> listing further sitemaps rather
+        # than pages. Treating those child URLs as pages yields an empty inventory, so
+        # follow one bounded level down to reach the real page list.
         for sitemap_url in sitemap_candidates[:3]:
-            try:
-                response, final_url = await self._fetch(client, sitemap_url)
-                if response.status_code != 200:
-                    continue
-                discovered.extend(_parse_sitemap(response.text, final_url, origin))
-            except (httpx.HTTPError, UnsafeTargetError, CrawlError, ET.ParseError):
-                continue
-        return parser, list(dict.fromkeys(discovered)), robots_txt
+            pages, children = await self._read_sitemap(client, sitemap_url, origin)
+            discovered.extend(pages)
+            for child_url in children[:20]:
+                if len(discovered) >= 500:
+                    break
+                child_pages, _ = await self._read_sitemap(client, child_url, origin)
+                if child_pages:
+                    expanded_index = True
+                discovered.extend(child_pages)
+        if expanded_index and not discovered:
+            warnings.append(
+                "A sitemap index was found but none of its child sitemaps returned page URLs."
+            )
+        return policy, list(dict.fromkeys(discovered))[:500], robots_txt
+
+    async def _read_sitemap(
+        self, client: httpx.AsyncClient, sitemap_url: str, origin: str
+    ) -> tuple[list[str], list[str]]:
+        """Return (page URLs, child sitemap URLs) for one sitemap document."""
+        try:
+            response, final_url = await self._fetch(
+                client, sitemap_url, allowed_origin=origin
+            )
+            if response.status_code != 200:
+                return [], []
+            return _parse_sitemap(response.text, final_url, origin)
+        except (httpx.HTTPError, UnsafeTargetError, CrawlError, ET.ParseError):
+            return [], []
 
 
 def _origin(url: str) -> str:
@@ -224,13 +294,26 @@ def _origin(url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc.lower()}"
 
 
-def _parse_sitemap(xml: str, sitemap_url: str, origin: str) -> list[str]:
+def _parse_sitemap(xml: str, sitemap_url: str, origin: str) -> tuple[list[str], list[str]]:
+    """Split a sitemap document into page URLs and nested sitemap URLs.
+
+    A `<sitemapindex>` lists other sitemaps, not pages. Both element types use `<loc>`,
+    so the parent tag is what distinguishes them.
+    """
     root = ET.fromstring(xml)
-    urls: list[str] = []
+    is_index = root.tag.rsplit("}", 1)[-1].lower() == "sitemapindex"
+    pages: list[str] = []
+    children: list[str] = []
     for element in root.iter():
         if element.tag.rsplit("}", 1)[-1].lower() != "loc" or not element.text:
             continue
         candidate = canonicalize_discovered_url(sitemap_url, element.text)
-        if candidate and _origin(candidate) == origin:
-            urls.append(candidate)
-    return urls[:100]
+        if not candidate or _origin(candidate) != origin:
+            continue
+        parent_is_sitemap = is_index or candidate.lower().endswith((".xml", ".xml.gz"))
+        if parent_is_sitemap:
+            if candidate != sitemap_url:
+                children.append(candidate)
+        else:
+            pages.append(candidate)
+    return pages[:500], list(dict.fromkeys(children))

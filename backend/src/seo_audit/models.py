@@ -87,6 +87,11 @@ class ContentSection(BaseModel):
     text: str
 
 
+class HeadingRecord(BaseModel):
+    level: Literal["h1", "h2", "h3"]
+    text: str
+
+
 class PageRecord(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     audit_id: str
@@ -101,15 +106,28 @@ class PageRecord(BaseModel):
     robots_directives: list[str] = Field(default_factory=list)
     h1: list[str] = Field(default_factory=list)
     h2: list[str] = Field(default_factory=list)
+    headings: list[HeadingRecord] = Field(default_factory=list)
     word_count: int = 0
     internal_links: list[LinkRecord] = Field(default_factory=list)
+    external_links: list[LinkRecord] = Field(default_factory=list)
     link_occurrences: list[LinkRecord] = Field(default_factory=list)
     content_sections: list[ContentSection] = Field(default_factory=list)
+    main_text: str = ""
+    main_text_truncated: bool = False
     images_total: int = 0
     images_missing_alt: int = 0
+    images_empty_alt: int = 0
+    # Images whose alt attribute is present but carries no information ("Gallery
+    # Image", "image1.jpg"). These pass a missing-alt check while helping nobody.
+    images_generic_alt: int = 0
     schema_types: list[str] = Field(default_factory=list)
+    json_ld_errors: list[str] = Field(default_factory=list)
     has_viewport: bool = False
     content_hash: str | None = None
+    # A 64-bit SimHash of the visible text, stored as a decimal string. An exact hash
+    # only catches byte-identical pages; templated pages that differ by a place name
+    # need a similarity measure, and SimHash gives one that survives persistence.
+    content_simhash: str | None = None
     fetch_error: str | None = None
 
 

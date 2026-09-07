@@ -46,7 +46,9 @@ def test_partial_crawl_labels_zero_inbound_as_candidate_and_detects_weak_anchor(
 def test_complete_crawl_can_confirm_orphan_and_never_recommends_an_existing_pair():
     target = page("/services", "Payroll services")
     source = page("/guide", "Payroll guide")
-    home = page("/", "Payroll company", [LinkRecord(url=source.final_url, anchor_text="Payroll guide")])
+    home = page("/", "Payroll company", [LinkRecord(
+        url=source.final_url, anchor_text="Payroll guide", placement="content"
+    )])
     analysis = analyze_crawl(
         CrawlResult(
             pages=[home, source, target], origin="https://example.com",
@@ -57,6 +59,29 @@ def test_complete_crawl_can_confirm_orphan_and_never_recommends_an_existing_pair
     assert next(item for item in analysis.pages if item.url == target.final_url).orphan_status == "confirmed"
     assert any(item.target_url == target.final_url and item.recommendation_type == "orphan" for item in analysis.candidates)
     assert not any(item.source_url == home.final_url and item.target_url == source.final_url for item in analysis.candidates)
+
+
+def test_navigation_link_does_not_hide_a_useful_contextual_gap():
+    target = page("/pricing", "CRM pricing for small businesses")
+    source = page("/guide", "CRM pricing guide for small businesses", [LinkRecord(
+        url=target.final_url,
+        anchor_text="Pricing",
+        placement="navigation",
+    )])
+    analysis = analyze_crawl(
+        CrawlResult(
+            pages=[page("/", "CRM software"), source, target],
+            origin="https://example.com",
+            coverage_complete=False,
+        ),
+        [target.final_url],
+    )
+    assert any(
+        item.source_url == source.final_url
+        and item.target_url == target.final_url
+        and item.recommendation_type in {"underlinked_important", "contextual_gap"}
+        for item in analysis.candidates
+    )
 
 
 def test_invalid_ai_anchor_is_replaced_by_deterministic_target_title():

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LocalSEOAgentPage } from "@/components/local-seo-agent-page";
 import { notFound } from "next/navigation";
 
 import { AuditForm } from "@/components/audit-form";
@@ -9,6 +10,8 @@ import { SchemaAgentPage } from "@/components/schema-agent-page";
 import { InternalLinkingAgentPage } from "@/components/internal-linking-agent-page";
 import { ContentBriefAgentPage } from "@/components/content-brief-agent-page";
 import { AIVisibilityAgentPage } from "@/components/ai-visibility-agent-page";
+import { SerpCompetitorAgentPage } from "@/components/serp-competitor-agent-page";
+import { ContentOptimizerAgentPage } from "@/components/content-optimizer-agent-page";
 import { agents, getAgent } from "@/data/agents";
 
 export function generateStaticParams() {
@@ -19,6 +22,9 @@ export default async function AgentPage({ params }: { params: Promise<{ slug: st
   const { slug } = await params;
   const agent = getAgent(slug);
   if (!agent) notFound();
+  if (slug === "local-seo") return <LocalSEOAgentPage />;
+  if (slug === "serp-competitor") return <SerpCompetitorAgentPage />;
+  if (slug === "content-optimizer") return <ContentOptimizerAgentPage />;
 
   if (slug === "meta-title-description") {
     return <MetadataAgentPage />;

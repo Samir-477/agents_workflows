@@ -8,7 +8,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 
-from seo_audit.models import ContentSection, LinkRecord, PageRecord
+from seo_audit.models import ContentSection, HeadingRecord, LinkRecord, PageRecord
 
 
 WHITESPACE = re.compile(r"\s+")
@@ -82,18 +82,24 @@ def extract_page(
         ]
         for name in ("h1", "h2")
     }
+    ordered_headings = [
+        HeadingRecord(level=tag.name, text=text)
+        for tag in soup.find_all(["h1", "h2", "h3"])
+        if (text := clean_text(tag.get_text(" ", strip=True)))
+    ]
 
     scope = urlsplit(scope_origin)
     links: list[LinkRecord] = []
+    external_links: list[LinkRecord] = []
     link_occurrences: list[LinkRecord] = []
     seen_links: set[str] = set()
     for anchor in soup.find_all("a", href=True):
-        url = canonicalize_discovered_url(final_url, str(anchor["href"]))
-        if not url:
+        raw_url = urljoin(final_url, str(anchor["href"]).strip())
+        parsed_raw = urlsplit(raw_url)
+        if parsed_raw.scheme not in {"http", "https"} or not parsed_raw.hostname:
             continue
+        url = urlunsplit((parsed_raw.scheme.lower(), parsed_raw.netloc.lower(), parsed_raw.path or "/", parsed_raw.query, ""))
         parsed = urlsplit(url)
-        if parsed.scheme != scope.scheme or parsed.netloc.lower() != scope.netloc.lower():
-            continue
         container = anchor.find_parent(["nav", "header", "footer", "aside", "main", "article"])
         container_name = container.name if container else None
         if container_name in {"nav", "header", "aside"}:
@@ -115,22 +121,40 @@ def extract_page(
             section_heading=section_heading,
             context_text=context_text[:500] if context_text else None,
         )
+        if parsed.scheme != scope.scheme or parsed.netloc.lower() != scope.netloc.lower():
+            external_links.append(record)
+            continue
+        discovered_url = canonicalize_discovered_url(final_url, str(anchor["href"]))
+        if not discovered_url:
+            continue
+        record = record.model_copy(update={"url": discovered_url})
         link_occurrences.append(record)
         if url not in seen_links:
             seen_links.add(url)
             links.append(record)
 
     images = soup.find_all("img")
-    missing_alt = sum(
-        1 for image in images if not clean_text(str(image.get("alt", "")))
-    )
+    missing_alt = 0
+    empty_alt = 0
+    generic_alt = 0
+    for image in images:
+        if not image.has_attr("alt"):
+            missing_alt += 1
+            continue
+        alt = clean_text(str(image.get("alt", "")))
+        if not alt:
+            empty_alt += 1
+        elif _is_generic_alt(alt):
+            generic_alt += 1
 
     schema_types: list[str] = []
-    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+    json_ld_errors: list[str] = []
+    for index, script in enumerate(soup.find_all("script", attrs={"type": "application/ld+json"}), start=1):
         raw = script.string or script.get_text()
         try:
             payload = json.loads(raw)
         except (json.JSONDecodeError, TypeError):
+            json_ld_errors.append(f"JSON-LD block {index} could not be parsed.")
             continue
         schema_types.extend(_collect_schema_types(payload))
 
@@ -161,6 +185,9 @@ def extract_page(
     for tag in soup(["script", "style", "noscript", "svg", "template"]):
         tag.decompose()
     visible_text = clean_text(soup.get_text(" ", strip=True)) or ""
+    main_root = soup.find("main") or soup.find("article") or soup.body or soup
+    full_main_text = clean_text(main_root.get_text(" ", strip=True)) or ""
+    main_text_limit = 20_000
     words = visible_text.split()
 
     return PageRecord(
@@ -176,18 +203,79 @@ def extract_page(
         robots_directives=robots_directives,
         h1=headings["h1"],
         h2=headings["h2"],
+        headings=ordered_headings,
         word_count=len(words),
         internal_links=links,
+        external_links=external_links,
         link_occurrences=link_occurrences,
         content_sections=content_sections,
+        main_text=full_main_text[:main_text_limit],
+        main_text_truncated=len(full_main_text) > main_text_limit,
         images_total=len(images),
         images_missing_alt=missing_alt,
+        images_empty_alt=empty_alt,
+        images_generic_alt=generic_alt,
         schema_types=list(dict.fromkeys(schema_types)),
+        json_ld_errors=json_ld_errors,
         has_viewport=soup.find("meta", attrs={"name": "viewport"}) is not None,
         content_hash=hashlib.sha256(visible_text.lower().encode("utf-8")).hexdigest()
         if visible_text
         else None,
+        content_simhash=str(simhash(visible_text)) if words else None,
     )
+
+
+# Alt text that is technically present but tells a reader or a machine nothing.
+_GENERIC_ALT_WORDS = {
+    "alt", "background", "banner", "gallery image", "graphic", "icon", "image",
+    "img", "logo", "photo", "picture", "placeholder", "thumbnail",
+}
+_FILENAME_ALT = re.compile(r"^[\w\-. ]+\.(?:jpe?g|png|gif|webp|svg|avif)$", re.IGNORECASE)
+_NUMBERED_ALT = re.compile(r"^(?:image|img|photo|picture|slide|banner|gallery)[\s_-]*\d+$", re.IGNORECASE)
+
+
+def _is_generic_alt(alt: str) -> bool:
+    normalized = alt.strip().casefold()
+    return (
+        normalized in _GENERIC_ALT_WORDS
+        or bool(_FILENAME_ALT.match(alt.strip()))
+        or bool(_NUMBERED_ALT.match(alt.strip()))
+    )
+
+
+def simhash(text: str, bits: int = 64) -> int:
+    """A 64-bit SimHash over word trigrams.
+
+    Near-identical pages produce hashes within a few bits of each other, which is what
+    templated location pages need: an exact hash misses them because a swapped place
+    name changes every byte-level digest.
+    """
+    words = re.findall(r"[a-z0-9]+", text.casefold())
+    if len(words) < 3:
+        return 0
+    vector = [0] * bits
+    for index in range(len(words) - 2):
+        shingle = " ".join(words[index : index + 3])
+        digest = int.from_bytes(
+            hashlib.blake2b(shingle.encode("utf-8"), digest_size=8).digest(), "big"
+        )
+        for bit in range(bits):
+            vector[bit] += 1 if digest >> bit & 1 else -1
+    result = 0
+    for bit in range(bits):
+        if vector[bit] > 0:
+            result |= 1 << bit
+    return result
+
+
+def simhash_distance(left: str | None, right: str | None) -> int | None:
+    """Hamming distance between two stored SimHash values, or None if unavailable."""
+    if not left or not right:
+        return None
+    try:
+        return bin(int(left) ^ int(right)).count("1")
+    except ValueError:
+        return None
 
 
 def _collect_schema_types(value: object) -> Iterable[str]:

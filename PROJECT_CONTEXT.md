@@ -225,6 +225,31 @@ Avoid promising that schema or formatting will guarantee inclusion in AI-generat
 
 The first useful version should prioritize trustworthy fundamentals over full feature coverage.
 
+## Mentor feedback audit and revised target (2026-09-07)
+
+The user requested a codebase audit and tracked checklist before implementing the
+supplied mentor feedback. The evidence, gaps, acceptance criteria and implementation
+sequence are maintained in `docs/MENTOR_FEEDBACK_AUDIT.md`.
+
+The revised target is ten agents: retain the eight existing workflows and add
+SERP & Competitor Analysis and SEO Content Optimizer. Connect them through shared
+crawl/research evidence and a persisted, resumable project workflow, producing a
+consolidated prioritized SEO Action Plan with explained scores and limitations.
+These additions are planned, not implemented at the audit checkpoint.
+
+The configured `SERPER_API_KEY` was verified by a successful live search request.
+There is currently no application integration. Google SERP evidence must remain
+distinct from observed mentions/citations across AI answer providers. The existing
+AI Visibility Agent measures on-site readiness only; actual answer observations
+require a separate measurement path and evaluation.
+
+Evaluation must include both automated regression fixtures and the mentor's
+50-100 page benchmark across 5-10 websites with genuine human-verified labels.
+The current 90 passing backend tests establish a software baseline, not measured
+SEO recommendation quality. Backlinks, rank monitoring and the other proposed
+future agents remain deferred. This is our product decision, not evidence of
+Dual7's internal architecture.
+
 ## Current implementation decision and baseline
 
 Decision recorded on 2026-09-05: the seventh persisted workflow is an
@@ -542,6 +567,54 @@ Important remaining MVP work includes:
 - exhaustive Core Web Vitals field data for every page;
 - large-scale enterprise crawling; and
 - unsupported guarantees about rankings or AI citations.
+
+## Local SEO Page Generator pipeline (2026-09-06)
+
+The eighth agent is `local-seo`, with a dedicated backend package, API namespace,
+Supabase `local_seo_generations` table, shared History filter, and a prompt-first
+test interface at `/agents/local-seo`. This is our project implementation, not a
+claim about Dual7's private architecture.
+
+Pipeline: extract source-supported business facts from a plain-language brief;
+draft one page per area (maximum three per run); assemble canonical business
+details, safe call/directions links, metadata counts and suggested JSON-LD;
+compare introductions, service passages and FAQ answers with area names removed;
+save review-only results. Physical branches support separate address/phone/hours.
+Service areas do not become invented branches. Planned/unknown locations do not
+receive active contact links or schema. Supplied operational facts must occur
+verbatim in the brief; generated prose still requires human factual review.
+Missing local proof and business facts become review tasks/placeholders.
+
+Pages contain editable copy JSON (including five to eight FAQs), saved edits,
+JSON export, supplied-URL link candidates and explicitly proposed sibling paths.
+Every result stays `needs_review`; there is no automated approval or publishing.
+This MVP does not implement visual page restyling, domain deployment, real lead
+forms/notifications, a seven-stage governance process, or review verification.
+Metadata length checks and duplicate-text similarity are heuristics, not ranking
+or search-display guarantees. Shared demo authentication remains non-production.
+
+Optional listing lookup is keyless and uses public OpenStreetMap open data: the
+area string is resolved to a bounding box with Nominatim, then Overpass returns
+named points of interest inside it (`backend/src/local_seo/maps.py`). Only the OSM
+id, matched name and an `openstreetmap.org` link are retained. Matches remain
+unconfirmed candidates; no listing tags, reviews or photos are persisted or fed to
+the LLM. Lookup requires a named existing physical branch and is opt-in; upstream
+failure or rate-limiting adds a warning and never discards drafts. Overly broad
+areas (span over 2 degrees) are skipped. No API key, billing account or Google
+Cloud project is required. Requests send an identifying `User-Agent` per the OSM
+usage policy; for heavier use, self-host Nominatim/Overpass or a mirror.
+References: https://operations.osmfoundation.org/policies/nominatim/
+and https://dev.overpass-api.de/overpass-doc/en/.
+
+Live verification helper: `python scripts/local_seo_smoke.py --maps` explicitly
+creates one labelled fictional sample run and optionally makes one keyless OSM
+lookup; it never prints credentials. Migration: `202609060001_local_seo.sql`.
+
+The earlier Google Places integration was removed on 2026-09-06 because the
+configured key returned HTTP 403 `PERMISSION_DENIED` on every Places API (New)
+endpoint (key/project restriction), and a keyed provider reintroduces the same
+class of failure. The keyless OSM path has no such dependency; small businesses
+without a shopfront may simply have no OSM entry, which is surfaced as a warning.
 
 ## Reliability and safety principles
 

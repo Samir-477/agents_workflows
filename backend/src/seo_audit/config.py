@@ -13,6 +13,8 @@ class Settings:
     report_output_dir: Path | None = None
     write_report_files: bool = True
     request_timeout_seconds: float = 12.0
+    crawl_timeout_seconds: float = 240.0
+    maximum_response_bytes: int = 5_000_000
     crawl_delay_seconds: float = 0.15
     default_crawl_limit: int = 20
     maximum_crawl_limit: int = 100
@@ -21,6 +23,12 @@ class Settings:
     llm_provider: str | None = None
     llm_model: str | None = None
     llm_api_key: str | None = None
+    # Providers reserve `max_tokens` against the account's output-tokens-per-minute
+    # allowance before running the request, so a budget above the plan's ceiling is
+    # rejected outright rather than rate-limited. Every agent sizes its calls under
+    # this value; lower it to match a smaller plan, raise it on a larger one.
+    llm_max_output_tokens: int = 900
+    serper_api_key: str | None = None
     allow_private_networks: bool = False
     cors_origins: tuple[str, ...] = (
         "http://localhost:3000",
@@ -74,6 +82,10 @@ class Settings:
             ),
             write_report_files=not bool(os.getenv("VERCEL")),
             request_timeout_seconds=float(os.getenv("SEO_AUDIT_REQUEST_TIMEOUT", "12")),
+            crawl_timeout_seconds=float(os.getenv("SEO_AUDIT_CRAWL_TIMEOUT", "240")),
+            maximum_response_bytes=max(
+                100_000, int(os.getenv("SEO_AUDIT_MAX_RESPONSE_BYTES", "5000000"))
+            ),
             crawl_delay_seconds=float(os.getenv("SEO_AUDIT_CRAWL_DELAY", "0.15")),
             default_crawl_limit=int(os.getenv("SEO_AUDIT_DEFAULT_CRAWL_LIMIT", "20")),
             maximum_crawl_limit=int(os.getenv("SEO_AUDIT_MAX_CRAWL_LIMIT", "100")),
@@ -89,6 +101,10 @@ class Settings:
                 or None
             ),
             llm_api_key=llm_api_key,
+            llm_max_output_tokens=max(
+                200, int(os.getenv("AGENT_LLM_MAX_OUTPUT_TOKENS", "900"))
+            ),
+            serper_api_key=(os.getenv("SERPER_API_KEY") or "").strip() or None,
             allow_private_networks=os.getenv("SEO_AUDIT_ALLOW_PRIVATE_NETWORKS", "false").lower()
             in {"1", "true", "yes"},
             cors_origins=cors_origins,

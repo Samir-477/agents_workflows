@@ -48,4 +48,6 @@ def test_shared_app_registers_audit_and_metadata_agent_routes():
     assert app.title == "Stellar Agents API"
     assert "/api/agents/meta-title-description/generations" in schema["paths"]
     assert "/api/agents/internal-linking/audits" in schema["paths"]
+    assert "/api/agents/serp-competitor/runs" in schema["paths"]
+    assert "/api/agents/content-optimizer/runs" in schema["paths"]
     assert "/api/agent-runs" in schema["paths"]

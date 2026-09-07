@@ -76,6 +76,24 @@ class DraftMetadataOption(BaseModel):
     rationale: str = Field(min_length=1, max_length=500)
 
 
+class DraftTitleBatch(BaseModel):
+    """One provider call's worth of titles.
+
+    The count is deliberately permissive here: providers routinely return one option
+    too many or too few, which is a normal miscount rather than an unusable response.
+    Deterministic code trims or tops up to the exact contract before validation.
+    """
+
+    titles: list[DraftMetadataOption] = Field(min_length=1, max_length=8)
+
+
+class DraftDescriptionBatch(BaseModel):
+    """One provider call's worth of descriptions, plus the page's brand guidance."""
+
+    descriptions: list[DraftMetadataOption] = Field(min_length=1, max_length=8)
+    brand_guidance: str = Field(min_length=1, max_length=700)
+
+
 class DraftPageMetadata(BaseModel):
     page_key: str = Field(min_length=1, max_length=120)
     titles: list[DraftMetadataOption] = Field(min_length=4, max_length=4)

@@ -32,9 +32,11 @@ def validate_brief(
     generation_id: str,
     request: ContentBriefCreate,
     draft: ContentBriefDraft,
+    degradations: list[str] | None = None,
 ) -> ValidationOutcome:
     issues: list[BriefValidationIssue] = []
     repair: list[str] = []
+    degradations = list(degradations or [])
 
     keyword_tokens = _tokens(request.target_keyword)
     title_tokens = _tokens(draft.suggested_title)
@@ -101,15 +103,39 @@ def validate_brief(
         repair.append("Remove outcome promises; describe editorial purpose without guaranteeing performance.")
 
     supplied_text = " ".join(filter(None, [request.target_keyword, request.audience, *request.secondary_keywords, request.angle, request.business_goal, request.product_context, request.source_notes])).casefold()
+    corrected_coverage = []
     for item in draft.coverage:
         if item.source == "provided" and item.name.casefold() not in supplied_text:
             issues.append(BriefValidationIssue(severity="warning", code="mislabelled-source", message=f"Coverage item '{item.name}' is not visibly present in the assignment and should be labelled inferred."))
             repair.append("Mark coverage items as provided only when their name appears in the assignment; otherwise use inferred.")
+            item = item.model_copy(update={"source": "inferred"})
+        corrected_coverage.append(item)
 
-    sanitized = draft.model_copy(update={"internal_links": valid_links, "conversion_notes": conversion_notes}, deep=True)
+    corrected_faqs = []
+    for faq in draft.faqs:
+        if faq.source == "provided" and faq.question.casefold() not in supplied_text:
+            issues.append(BriefValidationIssue(severity="warning", code="mislabelled-faq-source", message=f"FAQ '{faq.question}' is not visibly present in the assignment and should be labelled inferred."))
+            repair.append("Mark FAQs as provided only when the question appears in the assignment; otherwise use inferred.")
+            faq = faq.model_copy(update={"source": "inferred"})
+        corrected_faqs.append(faq)
+
+    sanitized = draft.model_copy(update={
+        "internal_links": valid_links,
+        "conversion_notes": conversion_notes,
+        "coverage": corrected_coverage,
+        "faqs": corrected_faqs,
+    }, deep=True)
     error_count = sum(issue.severity == "error" for issue in issues)
     warning_count = sum(issue.severity == "warning" for issue in issues)
     score = max(0, 100 - error_count * 18 - warning_count * 5)
+    if degradations:
+        # A skeleton satisfies every structural rule by construction, so a clean
+        # rule sweep must not be allowed to read as a finished, high-quality brief.
+        issues.append(BriefValidationIssue(
+            severity="error", code="degraded-generation",
+            message="Part of this brief was produced by a deterministic fallback rather than the model.",
+        ))
+        score = min(score, 40)
     limitations = [
         "Search intent, questions and entities are inferred from the assignment; no live SERP or search-volume dataset was queried.",
         "Suggested facts, statistics, regulations and product claims must be verified by the writer before publication.",
@@ -119,7 +145,9 @@ def validate_brief(
     result = ContentBriefResult(
         generation_id=generation_id, target_keyword=request.target_keyword,
         audience=request.audience, content_mode=request.content_mode, brief=sanitized,
-        quality_score=score, ready_for_handoff=error_count == 0,
-        issues=issues, warnings=[], evidence_limitations=limitations,
+        quality_score=score,
+        ready_for_handoff=error_count == 0 and not degradations,
+        issues=issues, degradations=degradations,
+        warnings=list(degradations), evidence_limitations=limitations,
     )
     return ValidationOutcome(result=result, repair_instructions=list(dict.fromkeys(repair)))

@@ -29,7 +29,7 @@ class AgentRunHistoryResponse(BaseModel):
 class AgentRunHistoryService:
     """Compose agent-specific stores into one filterable history surface."""
 
-    def __init__(self, audit_repository, metadata_repository, schema_repository, keyword_cluster_repository, internal_link_repository, content_brief_repository, visibility_repository):
+    def __init__(self, audit_repository, metadata_repository, schema_repository, keyword_cluster_repository, internal_link_repository, content_brief_repository, visibility_repository, local_repository=None, serp_repository=None, content_optimizer_repository=None):
         self.audit_repository = audit_repository
         self.metadata_repository = metadata_repository
         self.schema_repository = schema_repository
@@ -37,10 +37,45 @@ class AgentRunHistoryService:
         self.internal_link_repository = internal_link_repository
         self.content_brief_repository = content_brief_repository
         self.visibility_repository = visibility_repository
+        self.local_repository = local_repository
+        self.serp_repository = serp_repository
+        self.content_optimizer_repository = content_optimizer_repository
 
     def list_runs(self, *, limit: int, offset: int, query: str | None, agent: str | None) -> AgentRunHistoryResponse:
         candidates: list[AgentRunSummary] = []
         requested = limit + offset
+        if self.content_optimizer_repository and agent in {None, "", "all", "content-optimizer"}:
+            for run in self.content_optimizer_repository.list_generations(requested, 0, query):
+                source = run.request.content_url or "Supplied content"
+                actions = len(run.result.actions) if run.result else 0
+                score = f"score {run.result.overall_score}" if run.result and run.result.overall_score is not None else "not assessed"
+                candidates.append(AgentRunSummary(
+                    id=run.id, agent_slug="content-optimizer", agent_name="SEO Content Optimizer",
+                    title=run.request.target_keyword, detail=f"{source} · {actions} actions · {score}",
+                    status=run.status, stage=run.stage, progress=run.progress,
+                    result_available=run.result is not None, created_at=run.created_at, updated_at=run.updated_at,
+                ))
+        if self.serp_repository and agent in {None, "", "all", "serp-competitor"}:
+            for run in self.serp_repository.list_generations(requested, 0, query):
+                result_count = len(run.result.organic_results) if run.result else 0
+                inspected = sum(item.fetched for item in run.result.competitors) if run.result else 0
+                candidates.append(AgentRunSummary(
+                    id=run.id, agent_slug="serp-competitor",
+                    agent_name="SERP & Competitor Analysis Agent",
+                    title=run.request.target_keyword,
+                    detail=f"{result_count} results · {inspected} pages inspected · {run.request.country.upper()}",
+                    status=run.status, stage=run.stage, progress=run.progress,
+                    result_available=run.result is not None,
+                    created_at=run.created_at, updated_at=run.updated_at,
+                ))
+        if self.local_repository and agent in {None, "", "all", "local-seo"}:
+            for run in self.local_repository.list_generations(requested, 0, query):
+                candidates.append(AgentRunSummary(
+                    id=run.id, agent_slug="local-seo", agent_name="Local SEO Page Generator",
+                    title=run.request.prompt, detail=f"{len(run.result.pages) if run.result else 0} local page drafts",
+                    status=run.status, stage=run.stage, progress=run.progress,
+                    result_available=run.result is not None, created_at=run.created_at, updated_at=run.updated_at,
+                ))
         if agent in {None, "", "all", "seo-audit"}:
             for audit in self.audit_repository.list_audits(requested, 0, query):
                 pages, findings = self.audit_repository.counts(audit.id)
@@ -109,7 +144,11 @@ class AgentRunHistoryService:
                 ))
         if agent in {None, "", "all", "ai-visibility"}:
             for run in self.visibility_repository.list_audits(requested, 0, query):
-                score = f"score {run.result.overall_score}" if run.result else "visibility audit"
+                score = (
+                    f"score {run.result.overall_score}"
+                    if run.result and run.result.overall_score is not None
+                    else "not assessed" if run.result else "visibility audit"
+                )
                 pages = run.result.pages_crawled if run.result else 0
                 findings = len(run.result.findings) if run.result else 0
                 candidates.append(AgentRunSummary(
@@ -126,6 +165,12 @@ class AgentRunHistoryService:
 
     def _count(self, *, query: str | None, agent: str | None) -> int:
         total = 0
+        if self.content_optimizer_repository and agent in {None, "", "all", "content-optimizer"}:
+            total += self.content_optimizer_repository.count_generations(query)
+        if self.serp_repository and agent in {None, "", "all", "serp-competitor"}:
+            total += self.serp_repository.count_generations(query)
+        if self.local_repository and agent in {None, "", "all", "local-seo"}:
+            total += self.local_repository.count_generations(query)
         if agent in {None, "", "all", "seo-audit"}:
             total += self.audit_repository.count_audits(query)
         if agent in {None, "", "all", "meta-title-description"}:

@@ -12,6 +12,9 @@ import { deleteKeywordClusterGeneration } from "@/lib/keyword-cluster-api";
 import { deleteInternalLinkAudit } from "@/lib/internal-linking-api";
 import { deleteContentBrief } from "@/lib/content-brief-api";
 import { deleteVisibilityAudit } from "@/lib/ai-visibility-api";
+import { deleteLocalRun } from "@/lib/local-seo-api";
+import { deleteSerpRun } from "@/lib/serp-competitor-api";
+import { deleteContentOptimizerRun } from "@/lib/content-optimizer-api";
 
 const PAGE_SIZE = 10;
 
@@ -28,6 +31,8 @@ function agentStyle(slug: string): string {
   if (slug === "internal-linking") return "bg-[#f2f0ff] text-[#4b3fca]";
   if (slug === "content-brief") return "bg-[#fff1ed] text-[#bd4a33]";
   if (slug === "ai-visibility") return "bg-[#eef0ff] text-[#4034bd]";
+  if (slug === "serp-competitor") return "bg-[#eef6ff] text-[#376b9d]";
+  if (slug === "content-optimizer") return "bg-[#fff1ed] text-[#bd4a33]";
   return "bg-[#fff1ed] text-[#bd4a33]";
 }
 
@@ -38,6 +43,9 @@ function runHref(item: AgentRunSummary): string {
   if (item.agent_slug === "internal-linking") return `/agents/internal-linking/runs/${item.id}`;
   if (item.agent_slug === "content-brief") return `/agents/content-brief/runs/${item.id}`;
   if (item.agent_slug === "ai-visibility") return `/agents/ai-visibility/runs/${item.id}`;
+  if (item.agent_slug === "local-seo") return `/agents/local-seo/runs/${item.id}`;
+  if (item.agent_slug === "serp-competitor") return `/agents/serp-competitor/runs/${item.id}`;
+  if (item.agent_slug === "content-optimizer") return `/agents/content-optimizer/runs/${item.id}`;
   return `/agents/meta-title-description/runs/${item.id}`;
 }
 
@@ -81,6 +89,9 @@ export function AuditHistory() {
       else if (item.agent_slug === "internal-linking") await deleteInternalLinkAudit(item.id);
       else if (item.agent_slug === "content-brief") await deleteContentBrief(item.id);
       else if (item.agent_slug === "ai-visibility") await deleteVisibilityAudit(item.id);
+      else if (item.agent_slug === "local-seo") await deleteLocalRun(item.id);
+      else if (item.agent_slug === "serp-competitor") await deleteSerpRun(item.id);
+      else if (item.agent_slug === "content-optimizer") await deleteContentOptimizerRun(item.id);
       else await deleteMetadataGeneration(item.id);
       const nextPage = runs.length === 1 && page > 1 ? page - 1 : page;
       setPage(nextPage);
@@ -117,6 +128,9 @@ export function AuditHistory() {
             <option value="internal-linking">Internal Linking Agent</option>
             <option value="content-brief">SEO Content Brief Agent</option>
             <option value="ai-visibility">AI Visibility Audit Agent</option>
+            <option value="local-seo">Local SEO Page Generator</option>
+            <option value="serp-competitor">SERP &amp; Competitor Analysis</option>
+            <option value="content-optimizer">SEO Content Optimizer</option>
           </select>
           <span className="self-center text-xs text-[#85848b] sm:text-right">{total} saved run{total === 1 ? "" : "s"}</span>
         </div>

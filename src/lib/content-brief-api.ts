@@ -37,6 +37,7 @@ export interface BriefIssue { severity: "error" | "warning" | "note"; code: stri
 export interface ContentBriefResult {
   generation_id: string; target_keyword: string; audience: string; content_mode: "new" | "rewrite";
   brief: ContentBriefDraft; quality_score: number; ready_for_handoff: boolean; issues: BriefIssue[];
+  degradations: string[];
   warnings: string[]; evidence_limitations: string[]; generated_at: string;
 }
 export interface ContentBriefRecord {

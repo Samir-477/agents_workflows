@@ -13,6 +13,8 @@ from seo_audit.models import (
     AuditStage,
     AuditStatus,
     Finding,
+    ContentSection,
+    HeadingRecord,
     LinkRecord,
     PageRecord,
     utc_now,
@@ -133,6 +135,17 @@ class AuditRepository:
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_findings_audit ON findings(audit_id);
+
+                ALTER TABLE pages ADD COLUMN IF NOT EXISTS images_generic_alt INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE pages ADD COLUMN IF NOT EXISTS content_simhash TEXT;
+                ALTER TABLE pages ADD COLUMN IF NOT EXISTS headings_json TEXT NOT NULL DEFAULT '[]';
+                ALTER TABLE pages ADD COLUMN IF NOT EXISTS external_links_json TEXT NOT NULL DEFAULT '[]';
+                ALTER TABLE pages ADD COLUMN IF NOT EXISTS link_occurrences_json TEXT NOT NULL DEFAULT '[]';
+                ALTER TABLE pages ADD COLUMN IF NOT EXISTS content_sections_json TEXT NOT NULL DEFAULT '[]';
+                ALTER TABLE pages ADD COLUMN IF NOT EXISTS main_text TEXT NOT NULL DEFAULT '';
+                ALTER TABLE pages ADD COLUMN IF NOT EXISTS main_text_truncated INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE pages ADD COLUMN IF NOT EXISTS images_empty_alt INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE pages ADD COLUMN IF NOT EXISTS json_ld_errors_json TEXT NOT NULL DEFAULT '[]';
                 """
             for statement in schema.split(";"):
                 if statement.strip():
@@ -342,8 +355,11 @@ class AuditRepository:
                     content_type, title, meta_description, canonical,
                     robots_directives_json, h1_json, h2_json, word_count,
                     internal_links_json, images_total, images_missing_alt,
-                    schema_types_json, has_viewport, content_hash, fetch_error
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    images_generic_alt, schema_types_json, has_viewport,
+                    content_hash, content_simhash, fetch_error, headings_json,
+                    external_links_json, link_occurrences_json, content_sections_json,
+                    main_text, main_text_truncated, images_empty_alt, json_ld_errors_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -364,10 +380,20 @@ class AuditRepository:
                         json.dumps([link.model_dump() for link in page.internal_links]),
                         page.images_total,
                         page.images_missing_alt,
+                        page.images_generic_alt,
                         json.dumps(page.schema_types),
                         int(page.has_viewport),
                         page.content_hash,
+                        page.content_simhash,
                         page.fetch_error,
+                        json.dumps([heading.model_dump() for heading in page.headings]),
+                        json.dumps([link.model_dump() for link in page.external_links]),
+                        json.dumps([link.model_dump() for link in page.link_occurrences]),
+                        json.dumps([section.model_dump() for section in page.content_sections]),
+                        page.main_text,
+                        int(page.main_text_truncated),
+                        page.images_empty_alt,
+                        json.dumps(page.json_ld_errors),
                     )
                     for page in pages
                 ],
@@ -495,16 +521,35 @@ class AuditRepository:
             robots_directives=json.loads(row["robots_directives_json"]),
             h1=json.loads(row["h1_json"]),
             h2=json.loads(row["h2_json"]),
+            headings=[HeadingRecord.model_validate(item) for item in json.loads(row["headings_json"] or "[]")],
             word_count=row["word_count"],
             internal_links=[
                 LinkRecord.model_validate(link)
                 for link in json.loads(row["internal_links_json"])
             ],
+            external_links=[
+                LinkRecord.model_validate(link)
+                for link in json.loads(row["external_links_json"] or "[]")
+            ],
+            link_occurrences=[
+                LinkRecord.model_validate(link)
+                for link in json.loads(row["link_occurrences_json"] or "[]")
+            ],
+            content_sections=[
+                ContentSection.model_validate(section)
+                for section in json.loads(row["content_sections_json"] or "[]")
+            ],
+            main_text=row["main_text"] or "",
+            main_text_truncated=bool(row["main_text_truncated"]),
             images_total=row["images_total"],
             images_missing_alt=row["images_missing_alt"],
+            images_empty_alt=row["images_empty_alt"] or 0,
+            images_generic_alt=row["images_generic_alt"] or 0,
             schema_types=json.loads(row["schema_types_json"]),
+            json_ld_errors=json.loads(row["json_ld_errors_json"] or "[]"),
             has_viewport=bool(row["has_viewport"]),
             content_hash=row["content_hash"],
+            content_simhash=row["content_simhash"],
             fetch_error=row["fetch_error"],
         )
 

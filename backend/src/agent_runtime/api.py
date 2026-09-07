@@ -14,11 +14,16 @@ from agent_runtime.provider_settings import (
     ModelSelectionUpdate,
 )
 from agent_runtime.registry import AgentRegistration
+from local_seo.api import create_local_router
+from local_seo.generation import LocalGenerator
+from local_seo.storage import LocalRepository, MemoryLocalRepository
 from ai_visibility.api import create_visibility_router
 from ai_visibility.storage import MemoryVisibilityRepository, VisibilityRepository
 from content_brief.api import create_content_brief_router
 from content_brief.generation import ContentBriefGenerator
 from content_brief.storage import ContentBriefRepository, MemoryContentBriefRepository
+from content_optimizer.api import create_content_optimizer_router
+from content_optimizer.storage import ContentOptimizerRepository, MemoryContentOptimizerRepository
 from keyword_cluster.api import create_keyword_cluster_router
 from keyword_cluster.generation import KeywordClusterGenerator
 from keyword_cluster.storage import KeywordClusterRepository, MemoryKeywordClusterRepository
@@ -34,6 +39,9 @@ from schema_generator.storage import MemorySchemaGenerationRepository, SchemaGen
 from seo_audit.api import create_app as create_seo_app
 from seo_audit.config import Settings
 from seo_audit.storage import AuditRepository
+from serp_competitor.api import create_serp_router
+from serp_competitor.client import SerperClient
+from serp_competitor.storage import MemorySerpRepository, SerpRepository
 
 
 def create_app(
@@ -51,6 +59,13 @@ def create_app(
     content_brief_generator: ContentBriefGenerator | None = None,
     visibility_repository: VisibilityRepository | None = None,
     provider_repository: ProviderCredentialRepository | None = None,
+    local_repository=None,
+    local_generator=None,
+    serp_repository=None,
+    serper_client=None,
+    serp_crawler=None,
+    content_optimizer_repository=None,
+    content_optimizer_crawler=None,
 ) -> FastAPI:
     """Compose independently implemented agents into one deployable API."""
 
@@ -93,6 +108,16 @@ def create_app(
         provider_repository.resolve_api_key,
         provider_repository.resolve_model,
     )
+    local_repository = local_repository or (LocalRepository(settings.database_url) if settings.database_url else MemoryLocalRepository())
+    local_generator = local_generator or LocalGenerator(settings, provider_repository.resolve_api_key, provider_repository.resolve_model)
+    serp_repository = serp_repository or (
+        SerpRepository(settings.database_url) if settings.database_url else MemorySerpRepository()
+    )
+    serper_client = serper_client or SerperClient(settings.serper_api_key)
+    content_optimizer_repository = content_optimizer_repository or (
+        ContentOptimizerRepository(settings.database_url)
+        if settings.database_url else MemoryContentOptimizerRepository()
+    )
     schema_interpreter = schema_interpreter or SchemaInterpreter(
         settings,
         provider_repository.resolve_api_key,
@@ -121,6 +146,24 @@ def create_app(
     )
     original_lifespan = app.router.lifespan_context
     registrations = [
+        AgentRegistration(
+            slug="content-optimizer",
+            router=create_content_optimizer_router(
+                settings, content_optimizer_repository,
+                crawler=content_optimizer_crawler,
+                serp_repository=serp_repository,
+                content_brief_repository=content_brief_repository,
+            ),
+            initialize=content_optimizer_repository.initialize,
+        ),
+        AgentRegistration(
+            slug="serp-competitor",
+            router=create_serp_router(
+                settings, serp_repository, client=serper_client, crawler=serp_crawler
+            ),
+            initialize=serp_repository.initialize,
+        ),
+        AgentRegistration(slug="local-seo", router=create_local_router(local_repository, local_generator), initialize=local_repository.initialize),
         AgentRegistration(
             slug="meta-title-description",
             router=create_metadata_router(
@@ -176,6 +219,9 @@ def create_app(
         audit_repository, metadata_repository, schema_repository,
         keyword_cluster_repository, internal_link_repository,
         content_brief_repository, visibility_repository,
+        local_repository,
+        serp_repository,
+        content_optimizer_repository,
     )
 
     def settings_response() -> ProviderSettingsResponse:
@@ -274,6 +320,9 @@ def create_app(
     app.state.internal_link_repository = internal_link_repository
     app.state.content_brief_repository = content_brief_repository
     app.state.visibility_repository = visibility_repository
+    app.state.local_repository = local_repository
+    app.state.serp_repository = serp_repository
+    app.state.content_optimizer_repository = content_optimizer_repository
     app.state.provider_repository = provider_repository
     app.include_router(shared_router)
     for registration in registrations:

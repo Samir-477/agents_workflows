@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from urllib.robotparser import RobotFileParser
 
 from ai_visibility.models import (
     BotPolicy, DimensionScore, PageVisibilitySummary, VisibilityFinding,
     VisibilityRecord, VisibilityResult,
 )
 from seo_audit.crawler import CrawlResult
+from seo_audit.robots import RobotsPolicy
 
 
 BOTS = ("GPTBot", "ChatGPT-User", "PerplexityBot", "ClaudeBot")
@@ -29,13 +29,18 @@ def _finding(dimension, severity, title, observation, why, recommendation, urls,
 def _bot_policies(crawl: CrawlResult, target_url: str) -> list[BotPolicy]:
     if not crawl.robots_txt:
         return [BotPolicy(user_agent=bot, status="not_declared", evidence="No readable robots.txt policy was observed.") for bot in BOTS]
-    parser = RobotFileParser()
-    parser.parse(crawl.robots_txt.splitlines())
-    return [BotPolicy(
-        user_agent=bot,
-        status="allowed" if parser.can_fetch(bot, target_url) else "blocked",
-        evidence=f"robots.txt {'allows' if parser.can_fetch(bot, target_url) else 'disallows'} {bot} at the audited path.",
-    ) for bot in BOTS]
+    policy = RobotsPolicy.parse(crawl.robots_txt)
+    if not policy.declared:
+        return [BotPolicy(user_agent=bot, status="not_declared", evidence="robots.txt was served but could not be parsed.") for bot in BOTS]
+    policies = []
+    for bot in BOTS:
+        allowed = policy.can_fetch(target_url, bot)
+        policies.append(BotPolicy(
+            user_agent=bot,
+            status="allowed" if allowed else "blocked",
+            evidence=f"robots.txt {'allows' if allowed else 'disallows'} {bot} at the audited path.",
+        ))
+    return policies
 
 
 def analyze_visibility(crawl: CrawlResult, run: VisibilityRecord) -> VisibilityResult:
@@ -151,8 +156,8 @@ def analyze_visibility(crawl: CrawlResult, run: VisibilityRecord) -> VisibilityR
         "entity_clarity": "Whether the organization and product can be identified consistently from observed signals.",
         "citability": "A heuristic review of concise, structured, self-contained answer readiness.",
     }
-    dimensions = [DimensionScore(dimension=key, score=scores[key], summary=summaries[key], deductions=deductions[key]) for key in WEIGHTS]
-    overall = round(sum(scores[key] * WEIGHTS[key] for key in WEIGHTS))
+    dimensions = [DimensionScore(dimension=key, score=scores[key], summary=summaries[key], deductions=deductions[key]) for key in WEIGHTS] if valid_pages else []
+    overall = round(sum(scores[key] * WEIGHTS[key] for key in WEIGHTS)) if valid_pages else None
     per_url_findings = defaultdict(int)
     for finding in findings:
         for url in finding.affected_urls:
@@ -167,6 +172,11 @@ def analyze_visibility(crawl: CrawlResult, run: VisibilityRecord) -> VisibilityR
         "Robots results describe declared user-agent rules at audit time; they do not test every provider's full retrieval pipeline.",
         "Citability and entity-clarity scores are documented heuristics, not guarantees of ranking or citation.",
     ]
+    if not valid_pages:
+        limitations.insert(
+            0,
+            "Readiness was not assessed because no page content was inspected; zero is not a measured score.",
+        )
     if not crawl.coverage_complete:
         limitations.append("The crawl did not establish complete site coverage, so results describe the sampled pages only.")
     return VisibilityResult(
@@ -174,6 +184,10 @@ def analyze_visibility(crawl: CrawlResult, run: VisibilityRecord) -> VisibilityR
         pages_crawled=len(valid_pages), discovered_url_count=max(len(crawl.discovered_urls), len(crawl.pages)),
         coverage_complete=crawl.coverage_complete, overall_score=overall, dimensions=dimensions,
         bot_policies=policies, findings=sorted(findings, key=lambda f: f.priority_score, reverse=True), pages=pages,
-        methodology="Weighted score: discoverability 35%, machine readability 25%, entity clarity 20%, citability 20%. Each surfaced rule deducts documented severity points.",
+        methodology=(
+            "Weighted score: discoverability 35%, machine readability 25%, entity clarity 20%, citability 20%. Each surfaced rule deducts documented severity points."
+            if valid_pages else
+            "No readiness score was calculated because no page content was inspected."
+        ),
         warnings=list(dict.fromkeys(crawl.warnings)), limitations=limitations,
     )

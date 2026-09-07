@@ -168,7 +168,11 @@ def analyze_crawl(crawl: CrawlResult, important_urls: list[str]) -> AnalysisResu
             kind = "underlinked_important"
         if kind:
             sources = sorted(
-                (p for p in pages if normalize_url(p.final_url) != target_url and (normalize_url(p.final_url), target_url) not in edges),
+                (
+                    p for p in pages
+                    if normalize_url(p.final_url) != target_url
+                    and (normalize_url(p.final_url), target_url) not in contextual_edges
+                ),
                 key=lambda p: similarity(p, target), reverse=True,
             )
             for source in sources[:3]:
@@ -193,7 +197,7 @@ def analyze_crawl(crawl: CrawlResult, important_urls: list[str]) -> AnalysisResu
     possible = []
     for source_url, source in by_url.items():
         for target_url, target in by_url.items():
-            if source_url == target_url or (source_url, target_url) in edges:
+            if source_url == target_url or (source_url, target_url) in contextual_edges:
                 continue
             score = similarity(source, target)
             if score >= 0.18:

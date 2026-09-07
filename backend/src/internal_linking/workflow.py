@@ -114,6 +114,49 @@ def build_internal_link_graph(
                     "Fewer than two HTML pages were available, so cross-page link opportunities "
                     "could not be assessed reliably."
                 )
+            recommendations = compile_recommendations(analysis.candidates, refinements)
+            pages_examined = len(analysis.pages)
+            possible_pairs = pages_examined * (pages_examined - 1)
+            contextual_share = (
+                analysis.contextual_edge_count / analysis.observed_edge_count
+                if analysis.observed_edge_count
+                else 0.0
+            )
+            # A near-fully-connected graph is not a healthy one. It usually means a
+            # template links every page to every other page, so the link graph carries
+            # no topical signal at all — and it hides the fact that almost nothing is
+            # linked from within the copy.
+            if possible_pairs and analysis.observed_edge_count / possible_pairs >= 0.9:
+                warnings.append(
+                    f"Every page in this sample links to nearly every other: "
+                    f"{analysis.observed_edge_count} of {possible_pairs} possible page pairs are "
+                    f"connected, but only {analysis.contextual_edge_count} "
+                    f"({contextual_share:.0%}) of those links sit in body content. A site-wide "
+                    "template is doing all the linking, so the link graph expresses no topical "
+                    "hierarchy. Adding contextual links from within the copy is worth more here "
+                    "than adding further navigation links."
+                )
+            if not recommendations:
+                # An empty list is a real answer, but on its own it reads as a failure.
+                # Say what was examined and why nothing was proposed.
+                orphan_summary = (
+                    f"{analysis.confirmed_orphan_count} confirmed orphan page(s) and "
+                    f"{analysis.orphan_candidate_count} orphan candidate(s) were observed"
+                    if analysis.confirmed_orphan_count or analysis.orphan_candidate_count
+                    else "no orphan pages were observed"
+                )
+                anchor_summary = (
+                    f"{analysis.weak_anchor_count} weak-anchor candidate(s) were observed"
+                    if analysis.weak_anchor_count
+                    else "no generic anchor text was observed"
+                )
+                limitations.append(
+                    f"No individual linking opportunities were proposed. Across the "
+                    f"{pages_examined} pages examined, {analysis.observed_edge_count} of "
+                    f"{possible_pairs} possible directed page pairs are already linked; "
+                    f"{orphan_summary}, and {anchor_summary}. Raise the page "
+                    "limit or supply important URLs to search a wider or more targeted set."
+                )
             result = InternalLinkResult(
                 audit_id=run.id,
                 requested_url=run.requested_url,
@@ -128,9 +171,7 @@ def build_internal_link_graph(
                 confirmed_orphan_count=analysis.confirmed_orphan_count,
                 orphan_candidate_count=analysis.orphan_candidate_count,
                 weak_anchor_count=analysis.weak_anchor_count,
-                recommendations=compile_recommendations(
-                    analysis.candidates, refinements
-                ),
+                recommendations=recommendations,
                 pages=analysis.pages,
                 warnings=warnings,
                 limitations=limitations,

@@ -108,6 +108,37 @@ class ConversionNote(BaseModel):
     rationale: str = Field(min_length=10, max_length=600)
 
 
+class BriefStrategyDraft(BaseModel):
+    """First half of a brief: intent, framing and the section outline.
+
+    The brief is requested in two halves because one combined response exceeds the
+    per-request output allowance of smaller provider plans.
+    """
+
+    suggested_title: str = Field(min_length=5, max_length=180)
+    search_intent: SearchIntent
+    intent_confidence: IntentConfidence
+    intent_rationale: str = Field(min_length=20, max_length=1_000)
+    reader_job: str = Field(min_length=10, max_length=800)
+    recommended_format: str = Field(min_length=2, max_length=120)
+    tone_and_voice: list[str] = Field(min_length=1, max_length=8)
+    target_word_count_min: int = Field(ge=400, le=5_000)
+    target_word_count_max: int = Field(ge=600, le=6_000)
+    introduction_guidance: str = Field(min_length=20, max_length=1_000)
+    outline: list[OutlineSection] = Field(min_length=3, max_length=18)
+
+
+class BriefSupportDraft(BaseModel):
+    """Second half of a brief: coverage, questions, links and writer QA."""
+
+    coverage: list[CoverageItem] = Field(min_length=3, max_length=40)
+    faqs: list[FAQItem] = Field(default_factory=list, max_length=10)
+    internal_links: list[BriefLinkRecommendation] = Field(default_factory=list, max_length=30)
+    conversion_notes: list[ConversionNote] = Field(default_factory=list, max_length=8)
+    assumptions: list[str] = Field(default_factory=list, max_length=20)
+    writer_checks: list[str] = Field(min_length=3, max_length=20)
+
+
 class ContentBriefDraft(BaseModel):
     suggested_title: str = Field(min_length=5, max_length=180)
     search_intent: SearchIntent
@@ -149,6 +180,10 @@ class ContentBriefResult(BaseModel):
     quality_score: int = Field(ge=0, le=100)
     ready_for_handoff: bool
     issues: list[BriefValidationIssue] = Field(default_factory=list)
+    # Ways this run fell short of a full-quality generation, such as a provider
+    # response that had to be replaced with a deterministic skeleton. A degraded run
+    # must never be presented to the user as a clean result.
+    degradations: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     evidence_limitations: list[str] = Field(default_factory=list)
     generated_at: datetime = Field(default_factory=utc_now)

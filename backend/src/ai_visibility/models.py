@@ -94,7 +94,7 @@ class VisibilityResult(BaseModel):
     pages_crawled: int
     discovered_url_count: int
     coverage_complete: bool
-    overall_score: int = Field(ge=0, le=100)
+    overall_score: int | None = Field(default=None, ge=0, le=100)
     dimensions: list[DimensionScore]
     bot_policies: list[BotPolicy]
     findings: list[VisibilityFinding]

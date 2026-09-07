@@ -1,6 +1,26 @@
 # MVP Implementation Status
 
-Last updated: 2026-08-31
+Current implementation checkpoint (2026-09-07): see
+[Mentor feedback audit and implementation checklist](MENTOR_FEEDBACK_AUDIT.md)
+for the ten-agent inventory, resolved evidence defects, working server-side Serper
+integration, remaining orchestration/evaluation work, and acceptance criteria.
+
+Last updated: 2026-09-07
+
+## Current verified scope
+
+- Ten active specialist agents, including the new persisted SERP & Competitor
+  Analysis Agent and SEO Content Optimizer.
+- Six audited trust defects corrected: availability negation, missing-score states,
+  brief provenance, local edit grounding, contextual-link gaps, and image-alt evidence.
+- Shared page evidence now retains ordered H1-H3 headings, bounded main text,
+  external links, malformed JSON-LD diagnostics and truncation state.
+- The crawler enforces response-byte, redirect-origin and total-stage limits.
+- Serper is configured only through the server environment, reports boolean setup
+  status, retries within a fixed budget, and reuses fresh locale-specific snapshots.
+- SERP and optimizer result pages expose observations, interpretations, sources,
+  partial coverage, limitations and JSON copy/export.
+- Verification: 119 backend tests, ESLint, TypeScript and Next.js production build pass.
 
 ## Current deployed flow
 

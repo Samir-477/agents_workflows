@@ -39,6 +39,22 @@ def test_analysis_exposes_policy_evidence_and_transparent_scores():
     assert any("does not measure" in limitation for limitation in result.limitations)
 
 
+def test_no_inspected_pages_are_not_scored_as_zero_readiness():
+    repository = MemoryVisibilityRepository()
+    run = repository.create_audit(VisibilityCreate(url="https://example.com"))
+    result = analyze_visibility(
+        CrawlResult(
+            pages=[],
+            origin="https://example.com",
+            warnings=["robots.txt blocked the start page"],
+        ),
+        run,
+    )
+    assert result.overall_score is None
+    assert result.dimensions == []
+    assert "not assessed" in result.limitations[0].casefold()
+
+
 def test_visibility_routes_persist_and_reopen_result():
     class FakeCrawler:
         async def crawl(self, audit_id, start_url, limit):

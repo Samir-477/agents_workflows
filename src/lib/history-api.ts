@@ -1,7 +1,7 @@
 const HISTORY_API_BASE =
   process.env.NODE_ENV === "production" ? "/api" : "http://127.0.0.1:8000/api";
 
-export type AgentFilter = "all" | "seo-audit" | "meta-title-description" | "schema-markup" | "keyword-cluster" | "internal-linking" | "content-brief" | "ai-visibility";
+export type AgentFilter = "all" | "seo-audit" | "meta-title-description" | "schema-markup" | "keyword-cluster" | "internal-linking" | "content-brief" | "ai-visibility" | "local-seo" | "serp-competitor" | "content-optimizer";
 
 export interface AgentRunSummary {
   id: string;
