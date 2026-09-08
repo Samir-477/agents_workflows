@@ -55,6 +55,18 @@ def test_no_inspected_pages_are_not_scored_as_zero_readiness():
     assert "not assessed" in result.limitations[0].casefold()
 
 
+def test_malformed_json_ld_reduces_machine_readability():
+    repository = MemoryVisibilityRepository()
+    run = repository.create_audit(VisibilityCreate(url="https://example.com"))
+    crawl = sample_crawl()
+    crawl.pages[0].json_ld_errors = ["JSON-LD block 2 could not be parsed."]
+    result = analyze_visibility(crawl, run)
+    finding = next(item for item in result.findings if item.title == "JSON-LD could not be parsed")
+    assert finding.dimension == "machine_readability"
+    assert finding.confidence == "high"
+    assert next(item for item in result.dimensions if item.dimension == "machine_readability").score < 100
+
+
 def test_visibility_routes_persist_and_reopen_result():
     class FakeCrawler:
         async def crawl(self, audit_id, start_url, limit):

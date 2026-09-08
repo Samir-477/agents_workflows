@@ -209,6 +209,10 @@ The first implementation batch is Phase 1 plus the shared evidence contracts nee
 - O01-O06 are implemented under `backend/src/content_optimizer`. URL and text modes,
   optional SERP/brief handoffs, excluded unassessed checks, source-linked actions,
   hostile-content handling and persistence/reopen behavior have automated coverage.
-- Current automated result: 119 backend tests pass; ESLint, TypeScript and the Next.js
+- Current automated result: 123 backend tests pass; ESLint, TypeScript and the Next.js
   production build pass. A working browser session and human-reviewed real-site
   benchmark were not available, so U06 and E02-E05 remain open.
+- Real-site evaluation is now underway. The first case is documented in
+  `docs/evaluations/STERLING_HOLIDAYS_2026-09-08.md`; it confirms execution on
+  production HTML and records three fixes, but does not satisfy the multi-site or
+  human-review denominator required by E02-E05.

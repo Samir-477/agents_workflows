@@ -189,13 +189,18 @@ class SiteCrawler:
         allowed_origin: str | None = None,
     ) -> tuple[httpx.Response, str]:
         current = url
-        for _ in range(max_redirects + 1):
+        force_identity = False
+        for _ in range(max_redirects + 2):
             validated = await validate_public_target(
                 current, allow_private_networks=self.settings.allow_private_networks
             )
             if allowed_origin and validated.origin != allowed_origin:
                 raise CrawlError(f"A redirect left the settled audit origin: {validated.origin}")
-            request = client.build_request("GET", validated.url)
+            request = client.build_request(
+                "GET",
+                validated.url,
+                headers={"Accept-Encoding": "identity"} if force_identity else None,
+            )
             response = await client.send(request, follow_redirects=False, stream=True)
             if response.status_code not in {301, 302, 303, 307, 308}:
                 declared_length = response.headers.get("content-length")
@@ -205,15 +210,32 @@ class SiteCrawler:
                         f"Response exceeded the {self.settings.maximum_response_bytes}-byte limit: {validated.url}"
                     )
                 content = bytearray()
-                async for chunk in response.aiter_bytes():
-                    content.extend(chunk)
-                    if len(content) > self.settings.maximum_response_bytes:
-                        await response.aclose()
+                try:
+                    async for chunk in response.aiter_bytes():
+                        content.extend(chunk)
+                        if len(content) > self.settings.maximum_response_bytes:
+                            await response.aclose()
+                            raise CrawlError(
+                                f"Response exceeded the {self.settings.maximum_response_bytes}-byte limit: {validated.url}"
+                            )
+                except httpx.DecodingError as exc:
+                    await response.aclose()
+                    if force_identity:
                         raise CrawlError(
-                            f"Response exceeded the {self.settings.maximum_response_bytes}-byte limit: {validated.url}"
-                        )
+                            f"The server returned an unreadable compressed response: {validated.url}"
+                        ) from exc
+                    # Some CDNs label an uncompressed body as gzip/deflate. Retry
+                    # once without compression rather than failing the whole crawl.
+                    force_identity = True
+                    continue
                 status_code = response.status_code
-                headers = response.headers
+                headers = httpx.Headers(response.headers)
+                # `aiter_bytes()` has already decoded transfer content. Retaining
+                # these headers on the reconstructed buffered response would make
+                # `.text` attempt to decompress the body a second time.
+                for header in ("content-encoding", "content-length", "transfer-encoding"):
+                    if header in headers:
+                        del headers[header]
                 await response.aclose()
                 return httpx.Response(
                     status_code, headers=headers, content=bytes(content), request=request

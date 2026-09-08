@@ -84,6 +84,28 @@ def test_navigation_link_does_not_hide_a_useful_contextual_gap():
     )
 
 
+def test_sitewide_template_terms_do_not_create_false_contextual_matches():
+    pages = [
+        page("/goa", "Beach holidays in Goa"),
+        page("/kanha", "Wildlife stays in Kanha"),
+        page("/munnar", "Tea garden retreats in Munnar"),
+    ]
+    for current in pages:
+        current.content_sections = [ContentSection(
+            heading="Holiday experiences",
+            text="Book a Sterling resort with rooms, dining, amenities and memorable holiday experiences.",
+        )]
+        current.internal_links = [LinkRecord(
+            url=other.final_url, anchor_text=other.title or "Resort", placement="navigation"
+        ) for other in pages if other is not current]
+        current.link_occurrences = current.internal_links
+    analysis = analyze_crawl(
+        CrawlResult(pages=pages, origin="https://example.com", coverage_complete=True),
+        [],
+    )
+    assert not [item for item in analysis.candidates if item.recommendation_type == "contextual_gap"]
+
+
 def test_invalid_ai_anchor_is_replaced_by_deterministic_target_title():
     target = page("/pricing", "CRM pricing plans")
     source = page("/guide", "CRM buying guide")

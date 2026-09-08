@@ -94,6 +94,16 @@ def analyze_visibility(crawl: CrawlResult, run: VisibilityRecord) -> VisibilityR
             "Add only schema that truthfully matches visible content, starting with the organization and primary page types.",
             [p.final_url for p in missing_schema], [f"{p.final_url}: schema types=[]" for p in missing_schema], confidence="medium",
         ))
+    invalid_schema = [p for p in valid_pages if p.json_ld_errors]
+    if invalid_schema:
+        findings.append(_finding(
+            "machine_readability", "important", "JSON-LD could not be parsed",
+            f"{len(invalid_schema)} page(s) contained malformed JSON-LD blocks.",
+            "Malformed structured data cannot reliably communicate the page's entities to search or answer systems.",
+            "Correct the JSON syntax, validate the rendered page, and confirm every property matches visible content.",
+            [p.final_url for p in invalid_schema],
+            [f"{p.final_url}: {'; '.join(p.json_ld_errors[:3])}" for p in invalid_schema],
+        ))
 
     context_names = [name for name in (run.business_name, run.product_name) if name]
     if context_names and valid_pages:

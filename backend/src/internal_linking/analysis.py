@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from math import ceil
 from urllib.parse import urlsplit, urlunsplit
 
 from internal_linking.models import (
@@ -59,8 +60,10 @@ def page_text(page: PageRecord) -> str:
     return " ".join(filter(None, [page.title, *page.h1, *page.h2, *(s.heading for s in page.content_sections), *(s.text[:500] for s in page.content_sections[:8])]))
 
 
-def similarity(source: PageRecord, target: PageRecord) -> float:
-    left, right = tokens(page_text(source)), tokens(page_text(target))
+def similarity(source: PageRecord, target: PageRecord, excluded_terms: set[str] | None = None) -> float:
+    excluded_terms = excluded_terms or set()
+    left = tokens(page_text(source)) - excluded_terms
+    right = tokens(page_text(target)) - excluded_terms
     if not left or not right:
         return 0.0
     shared = left & right
@@ -76,8 +79,14 @@ def page_role(url: str) -> str:
     return "general"
 
 
-def _best_section(source: PageRecord, target: PageRecord) -> tuple[str | None, str | None]:
-    target_terms = tokens(" ".join(filter(None, [target.title, *target.h1, *target.h2])))
+def _best_section(
+    source: PageRecord,
+    target: PageRecord,
+    excluded_terms: set[str] | None = None,
+    *,
+    require_overlap: bool = False,
+) -> tuple[str | None, str | None]:
+    target_terms = tokens(" ".join(filter(None, [target.title, *target.h1, *target.h2]))) - (excluded_terms or set())
     ranked = []
     for section in source.content_sections:
         overlap = len(tokens(f"{section.heading} {section.text}") & target_terms)
@@ -86,6 +95,8 @@ def _best_section(source: PageRecord, target: PageRecord) -> tuple[str | None, s
         overlap, heading, snippet = max(ranked, key=lambda item: item[0])
         if overlap:
             return heading or None, snippet or None
+    if require_overlap:
+        return None, None
     first = source.content_sections[0] if source.content_sections else None
     return (first.heading or None, first.text[:260]) if first else (None, None)
 
@@ -99,6 +110,19 @@ def analyze_crawl(crawl: CrawlResult, important_urls: list[str]) -> AnalysisResu
         and "noindex" not in {directive.casefold() for directive in p.robots_directives}
     ]
     by_url = {normalize_url(p.final_url): p for p in pages}
+    document_frequency = Counter(
+        term for page in pages for term in tokens(page_text(page))
+    )
+    # Repeated template and brand vocabulary can make unrelated pages look
+    # topically similar. Exclude terms present on most sampled pages from
+    # relationship scoring while retaining them in the underlying evidence.
+    boilerplate_terms = {
+        term for term, count in document_frequency.items()
+        if len(pages) >= 3 and count >= ceil(len(pages) * 0.8)
+    }
+
+    def relatedness(source: PageRecord, target: PageRecord) -> float:
+        return similarity(source, target, boilerplate_terms)
     important = {normalize_url(url) for url in important_urls}
     sitemap_inventory = {normalize_url(url) for url in crawl.sitemap_urls}
     incoming: dict[str, set[str]] = defaultdict(set)
@@ -129,7 +153,7 @@ def analyze_crawl(crawl: CrawlResult, important_urls: list[str]) -> AnalysisResu
                     source_title=page.title or source, target_url=target,
                     target_title=by_url[target].title or target, current_anchor=link.anchor_text.strip(),
                     section_heading=link.section_heading, context_snippet=link.context_text,
-                    topical_score=similarity(page, by_url[target]),
+                    topical_score=relatedness(page, by_url[target]),
                     target_importance=20 if target in important else 10 if page_role(target) == "commercial" else 0,
                     source_is_contextual=link.placement == "content",
                 ))
@@ -173,14 +197,14 @@ def analyze_crawl(crawl: CrawlResult, important_urls: list[str]) -> AnalysisResu
                     if normalize_url(p.final_url) != target_url
                     and (normalize_url(p.final_url), target_url) not in contextual_edges
                 ),
-                key=lambda p: similarity(p, target), reverse=True,
+                key=lambda p: relatedness(p, target), reverse=True,
             )
             for source in sources[:3]:
-                score = similarity(source, target)
+                score = relatedness(source, target)
                 if score < 0.05 and kind == "underlinked_important":
                     continue
                 source_url = normalize_url(source.final_url)
-                heading, snippet = _best_section(source, target)
+                heading, snippet = _best_section(source, target, boilerplate_terms)
                 key = (source_url, target_url, kind)
                 if key in missing_pairs:
                     continue
@@ -199,13 +223,17 @@ def analyze_crawl(crawl: CrawlResult, important_urls: list[str]) -> AnalysisResu
         for target_url, target in by_url.items():
             if source_url == target_url or (source_url, target_url) in contextual_edges:
                 continue
-            score = similarity(source, target)
+            score = relatedness(source, target)
             if score >= 0.18:
                 possible.append((score, source_url, source, target_url, target))
     for score, source_url, source, target_url, target in sorted(possible, reverse=True)[:10]:
         if any(c.source_url == source_url and c.target_url == target_url for c in candidates):
             continue
-        heading, snippet = _best_section(source, target)
+        heading, snippet = _best_section(
+            source, target, boilerplate_terms, require_overlap=True
+        )
+        if not heading or not snippet:
+            continue
         candidates.append(LinkCandidate(
             recommendation_type="contextual_gap", source_url=source_url,
             source_title=source.title or source_url, target_url=target_url,
@@ -264,7 +292,14 @@ def compile_recommendations(
         anchors = list(dict.fromkeys(anchors))[:3]
         score = min(100, _base_score(candidate.recommendation_type) + candidate.target_importance + round(candidate.topical_score * 20) + (5 if candidate.section_heading else 0))
         tier = "critical" if score >= 70 else "important" if score >= 45 else "opportunity"
-        confidence = "high" if candidate.topical_score >= 0.25 and candidate.recommendation_type != "orphan_candidate" else "medium" if candidate.topical_score >= 0.08 else "low"
+        if candidate.recommendation_type == "contextual_gap":
+            confidence = (
+                "high" if candidate.topical_score >= 0.55 and candidate.section_heading and candidate.context_snippet
+                else "medium" if candidate.topical_score >= 0.25 and candidate.section_heading and candidate.context_snippet
+                else "low"
+            )
+        else:
+            confidence = "high" if candidate.topical_score >= 0.25 and candidate.recommendation_type != "orphan_candidate" else "medium" if candidate.topical_score >= 0.08 else "low"
         reason = draft.reasoning if draft else f"The source and target share topical signals, but no useful contextual link was observed in the crawl."
         note = draft.placement_note if draft else (
             f"Add the link naturally in the section '{candidate.section_heading}'." if candidate.section_heading else "Add the link in relevant body copy after confirming it helps the reader."

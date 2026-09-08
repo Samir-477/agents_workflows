@@ -1,4 +1,5 @@
 from pathlib import Path
+import gzip
 
 import httpx
 import pytest
@@ -95,6 +96,55 @@ async def test_fetch_rejects_redirect_that_leaves_settled_origin(monkeypatch):
     async with httpx.AsyncClient(transport=httpx.MockTransport(redirect)) as client:
         with pytest.raises(CrawlError, match="left the settled audit origin"):
             await crawler._fetch(client, "https://example.com/page", allowed_origin="https://example.com")
+
+
+@pytest.mark.asyncio
+async def test_fetch_retries_once_without_compression_for_mislabeled_body(monkeypatch):
+    async def fake_validate(url: str, allow_private_networks: bool = False):
+        return ValidatedTarget(url=url, origin="https://example.com")
+
+    monkeypatch.setattr("seo_audit.crawler.validate_public_target", fake_validate)
+    encodings = []
+
+    def respond(request):
+        encodings.append(request.headers.get("accept-encoding"))
+        if request.headers.get("accept-encoding") != "identity":
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/html", "content-encoding": "gzip"},
+                stream=httpx.ByteStream(b"<html>not really gzipped</html>"),
+            )
+        return httpx.Response(200, headers={"content-type": "text/html"}, content=b"<html>ok</html>")
+
+    crawler = SiteCrawler(Settings())
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        response, _ = await crawler._fetch(client, "https://example.com/", allowed_origin="https://example.com")
+
+    assert response.text == "<html>ok</html>"
+    assert encodings[-1] == "identity"
+
+
+@pytest.mark.asyncio
+async def test_fetch_does_not_decode_a_valid_compressed_response_twice(monkeypatch):
+    async def fake_validate(url: str, allow_private_networks: bool = False):
+        return ValidatedTarget(url=url, origin="https://example.com")
+
+    monkeypatch.setattr("seo_audit.crawler.validate_public_target", fake_validate)
+    body = b"<html><title>Compressed page</title></html>"
+
+    def respond(request):
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html", "content-encoding": "gzip"},
+            stream=httpx.ByteStream(gzip.compress(body)),
+        )
+
+    crawler = SiteCrawler(Settings())
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        response, _ = await crawler._fetch(client, "https://example.com/", allowed_origin="https://example.com")
+
+    assert response.text == body.decode()
+    assert "content-encoding" not in response.headers
 
 
 @pytest.mark.asyncio

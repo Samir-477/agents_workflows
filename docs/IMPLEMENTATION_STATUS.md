@@ -20,7 +20,10 @@ Last updated: 2026-09-07
   status, retries within a fixed budget, and reuses fresh locale-specific snapshots.
 - SERP and optimizer result pages expose observations, interpretations, sources,
   partial coverage, limitations and JSON copy/export.
-- Verification: 119 backend tests, ESLint, TypeScript and Next.js production build pass.
+- Verification: 123 backend tests, ESLint, TypeScript and Next.js production build pass.
+- Real-site evaluation has started with the
+  [Sterling Holidays benchmark](evaluations/STERLING_HOLIDAYS_2026-09-08.md),
+  which produced and verified three additional pipeline fixes.
 
 ## Current deployed flow
 
