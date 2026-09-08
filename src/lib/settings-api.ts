@@ -1,7 +1,10 @@
-const SETTINGS_API_BASE =
-  process.env.NODE_ENV === "production"
-    ? "/api/settings"
-    : "http://localhost:8000/api/settings";
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+const localApiRoot = configuredApiUrl && /^https?:\/\//i.test(configuredApiUrl)
+  ? configuredApiUrl.replace(/\/$/, "").replace(/\/api\/agents\/seo-audit$/, "/api")
+  : "http://127.0.0.1:8000/api";
+const SETTINGS_API_BASE = process.env.NODE_ENV === "production"
+  ? "/api/settings"
+  : `${localApiRoot}/settings`;
 
 export type ProviderName = "groq";
 

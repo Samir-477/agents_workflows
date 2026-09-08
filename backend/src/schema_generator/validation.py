@@ -14,6 +14,7 @@ _COMMON_PROPERTIES = {
 _TYPE_PROPERTIES: dict[str, set[str]] = {
     "Organization": {"logo", "telephone", "email", "address", "contactPoint", "founder", "foundingDate"},
     "LocalBusiness": {"address", "telephone", "email", "geo", "openingHours", "openingHoursSpecification", "priceRange"},
+    "LodgingBusiness": {"address", "telephone", "email", "geo", "openingHours", "openingHoursSpecification", "priceRange", "amenityFeature", "numberOfRooms", "checkinTime", "checkoutTime", "petsAllowed", "starRating"},
     "MedicalBusiness": {"address", "telephone", "email", "geo", "openingHours", "openingHoursSpecification", "priceRange"},
     "Product": {"sku", "mpn", "brand", "offers", "review", "aggregateRating", "category", "color", "material"},
     "Article": {"headline", "author", "publisher", "datePublished", "dateModified", "articleBody", "wordCount"},
@@ -26,7 +27,7 @@ _DATE_KEYS = {"datePublished", "dateModified", "startDate", "endDate", "founding
 _SOURCE_FACT_KEYS = {
     "price", "lowPrice", "highPrice", "priceCurrency", "ratingValue", "reviewCount",
     "ratingCount", "offerCount", "telephone", "email", "datePublished", "dateModified",
-    "startDate", "endDate", "foundingDate", "openingHours", "availability",
+    "startDate", "endDate", "foundingDate", "openingHours", "availability", "numberOfRooms",
 }
 _CURRENCY_MARKERS = {"GBP": ("£", "gbp"), "USD": ("$", "usd"), "EUR": ("€", "eur"), "INR": ("₹", "inr")}
 _MONTH_NAMES = (

@@ -62,7 +62,12 @@ The page counts overlap and must not be presented as 45 unique reviewed pages.
 
 ## Inputs required before testing the remaining agents
 
-The following must be supplied rather than inferred:
+The remaining agents were subsequently exercised using explicitly labelled
+evaluation fixtures and public facts. See the
+[full ten-agent report](STERLING_HOLIDAYS_FULL_AGENT_REPORT_2026-09-08.md).
+
+The following still must be supplied before treating those outputs as an approved
+client strategy rather than an evaluation:
 
 - the primary target keyword and audience for the homepage;
 - one priority resort URL with its target keyword and audience;

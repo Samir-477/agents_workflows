@@ -5,7 +5,7 @@ Current implementation checkpoint (2026-09-07): see
 for the ten-agent inventory, resolved evidence defects, working server-side Serper
 integration, remaining orchestration/evaluation work, and acceptance criteria.
 
-Last updated: 2026-09-07
+Last updated: 2026-09-08
 
 ## Current verified scope
 
@@ -20,10 +20,14 @@ Last updated: 2026-09-07
   status, retries within a fixed budget, and reuses fresh locale-specific snapshots.
 - SERP and optimizer result pages expose observations, interpretations, sources,
   partial coverage, limitations and JSON copy/export.
-- Verification: 123 backend tests, ESLint, TypeScript and Next.js production build pass.
+- Verification: 126 backend tests, ESLint, TypeScript and Next.js production build pass.
 - Real-site evaluation has started with the
   [Sterling Holidays benchmark](evaluations/STERLING_HOLIDAYS_2026-09-08.md),
   which produced and verified three additional pipeline fixes.
+- All ten agents now have persisted Sterling runs documented in the
+  [full agent report](evaluations/STERLING_HOLIDAYS_FULL_AGENT_REPORT_2026-09-08.md).
+  The full run added sparse-main extraction fallback and LodgingBusiness support
+  in both schema and local-page output.
 
 ## Current deployed flow
 

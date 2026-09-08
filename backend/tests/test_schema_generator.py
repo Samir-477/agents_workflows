@@ -163,6 +163,7 @@ def test_compiler_accepts_complete_visible_faq_structure():
     [
         ("Organization", {"url": "https://example.com"}),
         ("LocalBusiness", {"address": {"@type": "PostalAddress", "streetAddress": "1 High Street"}}),
+        ("LodgingBusiness", {"address": {"@type": "PostalAddress", "streetAddress": "44 Gymkhana Road"}, "numberOfRooms": 102}),
         ("MedicalBusiness", {"address": "1 Clinic Road"}),
         ("Product", {"offers": {"@type": "Offer", "price": 10, "priceCurrency": "USD"}}),
         ("Article", {"headline": "An article", "image": "https://example.com/article.jpg", "datePublished": "2026-09-04"}),

@@ -1,4 +1,8 @@
-const BASE = (process.env.NODE_ENV === "production" ? "/api" : "http://127.0.0.1:8000/api") + "/agents/local-seo/generations";
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+const localApiRoot = configuredApiUrl && /^https?:\/\//i.test(configuredApiUrl)
+  ? configuredApiUrl.replace(/\/$/, "").replace(/\/api\/agents\/seo-audit$/, "/api")
+  : "http://127.0.0.1:8000/api";
+const BASE = (process.env.NODE_ENV === "production" ? "/api" : localApiRoot) + "/agents/local-seo/generations";
 
 export interface LocalCopy {
   title: string;

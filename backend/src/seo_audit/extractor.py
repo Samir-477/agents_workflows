@@ -162,7 +162,15 @@ def extract_page(
     active_heading: str | None = None
     seen_section_text: set[str] = set()
     total_section_characters = 0
-    content_root = soup.find("main") or soup.find("article") or soup.body or soup
+    semantic_roots = soup.find_all(["main", "article"])
+    content_root = max(
+        semantic_roots,
+        key=lambda node: len(clean_text(node.get_text(" ", strip=True)) or ""),
+        default=None,
+    )
+    body_root = soup.body or soup
+    if content_root is None or len(clean_text(content_root.get_text(" ", strip=True)) or "") < 120:
+        content_root = body_root
     for tag in content_root.find_all(["h1", "h2", "h3", "p", "li"]):
         if tag.find_parent(list(NON_CONTENT_CONTAINERS)):
             continue
@@ -185,7 +193,15 @@ def extract_page(
     for tag in soup(["script", "style", "noscript", "svg", "template"]):
         tag.decompose()
     visible_text = clean_text(soup.get_text(" ", strip=True)) or ""
-    main_root = soup.find("main") or soup.find("article") or soup.body or soup
+    semantic_roots = soup.find_all(["main", "article"])
+    main_root = max(
+        semantic_roots,
+        key=lambda node: len(clean_text(node.get_text(" ", strip=True)) or ""),
+        default=None,
+    )
+    body_root = soup.body or soup
+    if main_root is None or len(clean_text(main_root.get_text(" ", strip=True)) or "") < 120:
+        main_root = body_root
     full_main_text = clean_text(main_root.get_text(" ", strip=True)) or ""
     main_text_limit = 20_000
     words = visible_text.split()

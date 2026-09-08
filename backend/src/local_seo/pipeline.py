@@ -8,6 +8,14 @@ from local_seo.maps import MapsLookupError, lookup_candidates
 from local_seo.models import LocalResult, Page
 
 
+_LODGING_TERMS = re.compile(r"\b(?:accommodation|hotel|hotels|lodging|resort|resorts|inn|motel)\b", re.IGNORECASE)
+
+
+def _physical_business_type(profile) -> str:
+    context = " ".join([profile.business_name, *profile.services])
+    return "LodgingBusiness" if _LODGING_TERMS.search(context) else "LocalBusiness"
+
+
 def ground_profile(profile, prompt):
     """Extracted operational facts must have exact source support, not model invention."""
     if profile.exceeds_page_limit:
@@ -76,7 +84,7 @@ def finalize(profile, drafts, existing_urls, source_text=""):
             if phone:
                 provider["telephone"] = phone
             if location.kind == "physical" and location.address:
-                schema = {"@context": "https://schema.org", "@type": "LocalBusiness", "name": profile.business_name, "address": location.address}
+                schema = {"@context": "https://schema.org", "@type": _physical_business_type(profile), "name": profile.business_name, "address": location.address}
                 if phone:
                     schema["telephone"] = phone
             else:

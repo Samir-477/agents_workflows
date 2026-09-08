@@ -1,5 +1,8 @@
-const HISTORY_API_BASE =
-  process.env.NODE_ENV === "production" ? "/api" : "http://127.0.0.1:8000/api";
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+const localApiRoot = configuredApiUrl && /^https?:\/\//i.test(configuredApiUrl)
+  ? configuredApiUrl.replace(/\/$/, "").replace(/\/api\/agents\/seo-audit$/, "/api")
+  : "http://127.0.0.1:8000/api";
+const HISTORY_API_BASE = process.env.NODE_ENV === "production" ? "/api" : localApiRoot;
 
 export type AgentFilter = "all" | "seo-audit" | "meta-title-description" | "schema-markup" | "keyword-cluster" | "internal-linking" | "content-brief" | "ai-visibility" | "local-seo" | "serp-competitor" | "content-optimizer";
 

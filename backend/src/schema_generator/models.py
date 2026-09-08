@@ -32,6 +32,7 @@ class SchemaGenerationStage(StrEnum):
 SchemaType = Literal[
     "Organization",
     "LocalBusiness",
+    "LodgingBusiness",
     "MedicalBusiness",
     "Product",
     "Article",

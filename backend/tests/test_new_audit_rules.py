@@ -98,6 +98,27 @@ def test_extraction_retains_ordered_headings_external_links_and_schema_errors():
     assert "invalid_json_ld" in rule_ids([extracted])
 
 
+def test_extraction_uses_body_when_semantic_main_is_only_a_shell():
+    html = """
+    <html><body>
+      <main>2</main>
+      <section>
+        <h1>Sterling Kodai Lake</h1>
+        <p>This resort guide contains enough visible detail to support a useful content review.</p>
+        <p>Travellers can compare rooms, facilities, dining, activities, and the location near the lake.</p>
+      </section>
+    </body></html>
+    """
+    extracted = extract_page(
+        audit_id="audit", requested_url="https://example.com/resort",
+        final_url="https://example.com/resort", status_code=200,
+        content_type="text/html", html=html, depth=0,
+        scope_origin="https://example.com",
+    )
+    assert "This resort guide" in extracted.main_text
+    assert len(extracted.main_text.split()) > 15
+
+
 def test_over_long_title_and_description_are_flagged():
     head = (
         "<title>" + "An extremely long page title that will certainly be truncated" * 2 + "</title>"

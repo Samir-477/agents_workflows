@@ -17,6 +17,7 @@ _SAFE_KEY = re.compile(r"^(?:@[a-zA-Z]+|[a-zA-Z][a-zA-Z0-9]*)$")
 _REQUIRED: dict[str, tuple[str, ...]] = {
     "Organization": ("name",),
     "LocalBusiness": ("name", "address"),
+    "LodgingBusiness": ("name", "address"),
     "MedicalBusiness": ("name", "address"),
     "Product": ("name",),
     "Article": ("headline", "image", "datePublished"),
@@ -27,6 +28,7 @@ _REQUIRED: dict[str, tuple[str, ...]] = {
 _RECOMMENDED: dict[str, tuple[str, ...]] = {
     "Organization": ("url", "logo", "sameAs"),
     "LocalBusiness": ("telephone", "openingHoursSpecification", "url", "geo"),
+    "LodgingBusiness": ("telephone", "url", "geo"),
     "MedicalBusiness": ("telephone", "openingHoursSpecification", "url", "geo"),
     "Product": ("description", "image", "sku", "offers"),
     "Article": ("author", "publisher", "dateModified", "description"),

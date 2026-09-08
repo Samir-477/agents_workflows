@@ -42,6 +42,17 @@ def test_branch_overrides_and_schema():
     assert page.directions_url.startswith("https://www.google.com/maps/")
 
 
+def test_physical_accommodation_uses_lodging_business_schema():
+    lodging = Profile(
+        business_name="Lake View Resort",
+        phone="5550300",
+        services=["accommodation", "spa"],
+        locations=[Location(area="Kodaikanal", kind="physical", address="44 Lake Road")],
+    )
+    page = finalize(lodging, [copy("Kodaikanal")], []).pages[0]
+    assert page.json_ld["@type"] == "LodgingBusiness"
+
+
 def test_grounding_and_batch_limits():
     with pytest.raises(ValueError):
         ground_profile(profile(), "plumbing in Austin and Dallas")

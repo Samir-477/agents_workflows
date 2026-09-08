@@ -388,8 +388,9 @@ product copy and screenshots; it is not a claim about Dual7's private implementa
 - The MVP accepts a natural-language description of one page and its visible facts;
   it does not require or crawl a URL.
 - The model interprets the page into a constrained set of supported main types:
-  Organization, LocalBusiness, MedicalBusiness, Product, Article, FAQPage, Event,
-  and SoftwareApplication. It never owns final JSON serialization.
+  Organization, LocalBusiness, LodgingBusiness, MedicalBusiness, Product, Article,
+  FAQPage, Event, and SoftwareApplication. LodgingBusiness is preferred for hotels,
+  resorts and similar accommodation. The model never owns final JSON serialization.
 - Deterministic Python sanitizes properties, adds the schema.org context and main
   types, composes multi-entity pages into one graph, round-trips the JSON, and
   produces the ready-to-place script block.
@@ -584,6 +585,8 @@ Service areas do not become invented branches. Planned/unknown locations do not
 receive active contact links or schema. Supplied operational facts must occur
 verbatim in the brief; generated prose still requires human factual review.
 Missing local proof and business facts become review tasks/placeholders.
+Physical accommodation businesses emit LodgingBusiness markup; other confirmed
+physical branches use LocalBusiness.
 
 Pages contain editable copy JSON (including five to eight FAQs), saved edits,
 JSON export, supplied-URL link candidates and explicitly proposed sibling paths.
