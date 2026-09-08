@@ -9,6 +9,9 @@ survive manual review. One site is not enough to establish accuracy across the M
 
 Target: <https://www.sterlingholidays.com/>
 
+For a plain-language explanation of the evidence, business impact, and recommended
+actions, see the [Sterling management evidence report](STERLING_HOLIDAYS_MANAGEMENT_REPORT.md).
+
 ## Completed runs
 
 | Agent | Run ID | Scope | Result |
