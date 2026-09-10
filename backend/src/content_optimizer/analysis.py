@@ -29,6 +29,7 @@ class ContentInput:
     images_missing_alt: int | None = None
     images_empty_alt: int | None = None
     schema_types: list[str] | None = None
+    json_ld_errors: list[str] | None = None
     truncated: bool = False
 
 
@@ -77,7 +78,7 @@ def analyze_content(run, content: ContentInput, *, research=None, brief=None, wa
         action("high", "Content", "Target topic is not established early", "Title, H1 or introduction", _excerpt(opening), f"State the page's relationship to ‘{request.target_keyword}’ naturally in a prominent heading or the opening, while matching the reader's actual intent.", "high", "small", "Clear early topic framing helps readers and search systems understand the page.", ["content:body"])
 
     if exact_count == 0:
-        assess("keyword_usage", "Keyword use", "review", "The exact target phrase was not observed.", ["content:keyword-count"])
+        assess("keyword_usage", "Keyword use", "review", "The exact target phrase was not observed in the analyzed body text.", ["content:keyword-count"])
         action("medium", "Content", "Target phrase is absent", "Most relevant section", "0 exact uses", f"Use ‘{request.target_keyword}’ once where it reads naturally; do not force a density target.", "high", "small", "A natural exact mention can remove ambiguity without encouraging repetition.", ["content:keyword-count"])
     elif word_count and exact_count >= 6 and exact_count / word_count > 0.025:
         assess("keyword_usage", "Keyword use", "review", f"The exact phrase appears {exact_count} times in {word_count} words; repetition needs editorial review.", ["content:keyword-count", "content:word-count"])
@@ -127,8 +128,17 @@ def analyze_content(run, content: ContentInput, *, research=None, brief=None, wa
     if research is not None:
         for index, item in enumerate(research.topic_patterns[:12]):
             identifier = f"serp:topic:{index + 1}"
-            add_evidence(identifier, f"Observed SERP topic: {item.label}", f"Repeated across {item.count} result(s).", "serp", item.source_urls[0] if item.source_urls else None)
-            observed_topics.append((item.label, [identifier], "SERP pattern"))
+            add_evidence(identifier, f"Observed SERP title pattern: {item.label}", f"Repeated across {item.count} result(s).", "serp", item.source_urls[0] if item.source_urls else None)
+            tokens = [token.casefold() for token in WORDS.findall(item.label)]
+            useful = (
+                len(tokens) >= 2
+                and not any(token.isdigit() or token in {"updated", "update"} for token in tokens)
+                and not all(token in primary.split() for token in tokens)
+                and not (tokens[0] in {"hotel", "resort"} and all(token in primary.split() for token in tokens[1:]))
+            )
+            if useful:
+                observed_topics.append((item.label, [identifier], "SERP title pattern"))
+        warnings.append("Broad recurring words from result titles were retained as SERP observations, not treated as missing page topics.")
     if brief is not None:
         for index, item in enumerate(brief.brief.coverage[:20]):
             identifier = f"brief:coverage:{index + 1}"
@@ -179,7 +189,10 @@ def analyze_content(run, content: ContentInput, *, research=None, brief=None, wa
             action("low", "Images", "Empty alt needs contextual review", "Image elements", image_summary, "Confirm each empty-alt image is decorative; describe any image that carries information.", "medium", "small", "Empty alt is correct for decorative images but hides informative ones.", ["page:images"])
         schema = content.schema_types or []
         add_evidence("page:schema", "Observed schema types", ", ".join(schema) if schema else "None observed", "page", content.url)
-        assess("schema", "Structured data", "good" if schema else "review", ", ".join(schema) if schema else "No JSON-LD schema type was observed.", ["page:schema"])
+        schema_errors = content.json_ld_errors or []
+        if schema_errors:
+            add_evidence("page:schema-errors", "Structured data parsing errors", "\n".join(schema_errors), "page", content.url)
+        assess("schema", "Structured data", "good" if schema and not schema_errors else "review", "Parsing errors: " + "; ".join(schema_errors) if schema_errors else ", ".join(schema) if schema else "No JSON-LD schema type was observed.", ["page:schema", *(["page:schema-errors"] if schema_errors else [])])
         assess("freshness", "Freshness evidence", "not_assessed", "Published/modified dates and factual currency require source-specific review.")
     else:
         for key, label in (("metadata", "Metadata"), ("links", "Links"), ("images", "Images and alt text"), ("schema", "Structured data"), ("freshness", "Freshness evidence")):

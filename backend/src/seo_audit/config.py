@@ -23,6 +23,7 @@ class Settings:
     llm_provider: str | None = None
     llm_model: str | None = None
     llm_api_key: str | None = None
+    llm_base_url: str | None = None
     # Providers reserve `max_tokens` against the account's output-tokens-per-minute
     # allowance before running the request, so a budget above the plan's ceiling is
     # rejected outright rather than rate-limited. Every agent sizes its calls under
@@ -101,6 +102,7 @@ class Settings:
                 or None
             ),
             llm_api_key=llm_api_key,
+            llm_base_url=(os.getenv("AGENT_LLM_BASE_URL") or "").strip() or None,
             llm_max_output_tokens=max(
                 200, int(os.getenv("AGENT_LLM_MAX_OUTPUT_TOKENS", "900"))
             ),

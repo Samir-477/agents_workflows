@@ -62,7 +62,7 @@ class ContentBriefGenerator:
                 reasoning_format="hidden", **common,
             )
         if provider == "openai":
-            return ChatOpenAI(api_key=api_key, max_tokens=budget, **common)
+            return ChatOpenAI(api_key=api_key, base_url=self.settings.llm_base_url, max_tokens=budget, **common)
         raise RuntimeError(f"Unsupported LLM provider: {provider}")
 
     def _structured(self, schema, max_output_tokens: int):

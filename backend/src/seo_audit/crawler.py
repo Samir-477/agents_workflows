@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import xml.etree.ElementTree as ET
 from collections import deque
 from dataclasses import dataclass, field
@@ -71,7 +72,7 @@ class SiteCrawler:
             )
 
             queue: deque[tuple[str, int]] = deque([(first_url, 0)])
-            for sitemap_url in representative_url_order(sitemap_urls):
+            for sitemap_url in _focused_url_order(sitemap_urls, first_url):
                 if len(queue) >= limit:
                     break
                 queue.append((sitemap_url, 1))
@@ -115,7 +116,7 @@ class SiteCrawler:
                         final_url=final_url,
                         status_code=response.status_code,
                         content_type=content_type,
-                        html=response.text,
+                        html=_response_text(response),
                         depth=depth,
                         scope_origin=first_origin,
                     )
@@ -314,6 +315,27 @@ class SiteCrawler:
 def _origin(url: str) -> str:
     parsed = urlsplit(url)
     return f"{parsed.scheme}://{parsed.netloc.lower()}"
+
+
+def _response_text(response: httpx.Response) -> str:
+    """Prefer UTF-8 for modern HTML when a server omits or misstates charset."""
+    try:
+        return response.content.decode("utf-8")
+    except UnicodeDecodeError:
+        return response.text
+
+
+def _focused_url_order(urls, start_url: str) -> list[str]:
+    """Keep representative coverage while preferring pages related to the requested URL."""
+    ordered = representative_url_order(urls)
+    focus = {
+        token for token in re.findall(r"[a-z0-9]+", urlsplit(start_url).path.casefold())
+        if len(token) > 2 and token not in {"resorts", "hotels", "hotel", "resort"}
+    }
+    indexed = list(enumerate(ordered))
+    return [url for _, url in sorted(indexed, key=lambda pair: (
+        -len(focus & set(re.findall(r"[a-z0-9]+", urlsplit(pair[1]).path.casefold()))), pair[0]
+    ))]
 
 
 def _parse_sitemap(xml: str, sitemap_url: str, origin: str) -> tuple[list[str], list[str]]:

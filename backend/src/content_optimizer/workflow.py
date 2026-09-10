@@ -37,6 +37,7 @@ async def run_content_optimizer(
                     internal_links=len(page.internal_links), external_links=len(page.external_links),
                     images_total=page.images_total, images_missing_alt=page.images_missing_alt,
                     images_empty_alt=page.images_empty_alt, schema_types=page.schema_types,
+                    json_ld_errors=page.json_ld_errors,
                     truncated=page.main_text_truncated,
                 )
                 warnings.extend(crawl.warnings)

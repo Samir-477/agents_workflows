@@ -5,7 +5,7 @@ Current implementation checkpoint (2026-09-07): see
 for the ten-agent inventory, resolved evidence defects, working server-side Serper
 integration, remaining orchestration/evaluation work, and acceptance criteria.
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
 
 ## Current verified scope
 
@@ -28,6 +28,10 @@ Last updated: 2026-09-08
   [full agent report](evaluations/STERLING_HOLIDAYS_FULL_AGENT_REPORT_2026-09-08.md).
   The full run added sparse-main extraction fallback and LodgingBusiness support
   in both schema and local-page output.
+- A separate Website Diagnosis section now coordinates all ten agents for one
+  resort page using persisted, resumable tasks and one shared page capture.
+- The management report attributes every issue and evidence item to its agent,
+  separates observed faults from generated proposals, and downloads as PDF.
 
 ## Current deployed flow
 
@@ -73,14 +77,15 @@ The standalone worker remains available for local development and uses Supabase.
 
 ## Verification baseline
 
-- 30 backend tests pass.
+- 145 backend tests pass.
 - FastAPI imports and health/docs endpoints pass locally.
 - Frontend lint and production build pass.
 - Deterministic reporting works without an LLM key.
 
 ## Known limitations
 
-- Processing is bounded to one serverless invocation; larger crawls need a queue.
+- Individual agent flows remain bounded to one serverless invocation. Website
+  Diagnosis uses multiple short persisted invocations and can also use its worker.
 - Selective browser rendering is not implemented.
 - Sitemap indexes are not recursively expanded.
 - The score and rule catalogue remain MVP quality.

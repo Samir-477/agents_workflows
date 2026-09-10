@@ -1,11 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { COOKIE_NAME, verifySession } from "@/lib/session";
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  const authenticated =
-    request.cookies.get("stellar_demo_session")?.value === "stellar-admin";
+  const authenticated = await verifySession(request.cookies.get(COOKIE_NAME)?.value);
 
-  if (path.startsWith("/agents") && !authenticated) {
+  if ((path.startsWith("/agents") || path.startsWith("/diagnosis")) && !authenticated) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
   if ((path === "/" || path === "/login") && authenticated) {
@@ -18,5 +18,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/login", "/agents/:path*"],
+  matcher: ["/", "/login", "/agents/:path*", "/diagnosis/:path*"],
 };

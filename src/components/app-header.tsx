@@ -14,6 +14,7 @@ export function AppHeader() {
         </div>
 
         <nav className="flex items-center gap-3" aria-label="Account navigation">
+          <Link href="/diagnosis" className="rounded-lg px-3 py-2 text-sm font-semibold text-[#5140ad] hover:bg-[#f2effa]">Website Diagnosis</Link>
           <Link
             href="/agents"
             className="hidden rounded-lg px-3 py-2 text-sm font-medium text-[#5f5f68] hover:bg-[#f6f5f2] hover:text-[#12131a] sm:inline-flex"

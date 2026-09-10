@@ -122,7 +122,7 @@ def analyze_visibility(crawl: CrawlResult, run: VisibilityRecord) -> VisibilityR
                     [p.final_url for p in absent], [f"{p.final_url}: '{name}' not found in extracted visible text" for p in absent], confidence="medium",
                 ))
     elif valid_pages:
-        org_schema = [p for p in valid_pages if any(t.casefold() in {"organization", "localbusiness"} for t in p.schema_types)]
+        org_schema = [p for p in valid_pages if any(t.casefold() in {"organization", "localbusiness", "lodgingbusiness", "hotel", "resort", "motel", "bedandbreakfast", "hostel"} for t in p.schema_types)]
         if not org_schema:
             findings.append(_finding(
                 "entity_clarity", "opportunity", "Organization identity is not explicit in structured data",

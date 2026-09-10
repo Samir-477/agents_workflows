@@ -31,10 +31,18 @@ class PostgresRepository:
             yield connection
             connection.commit()
         except Exception:
-            connection.rollback()
+            try:
+                connection.rollback()
+            except Exception:
+                # Preserve the operation error when the server has already dropped
+                # the connection and rollback is no longer possible.
+                pass
             raise
         finally:
-            connection.close()
+            try:
+                connection.close()
+            except Exception:
+                pass
 
     @staticmethod
     def _sql(statement: str, params: Any = None) -> str:

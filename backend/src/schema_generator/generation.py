@@ -24,6 +24,9 @@ class SchemaInterpreter:
         self.model_resolver = model_resolver
 
     def _model(self) -> BaseChatModel:
+        if self.settings.llm_provider == "openai":
+            from langchain_openai import ChatOpenAI
+            return ChatOpenAI(api_key=self.settings.llm_api_key, model=self.settings.llm_model, base_url=self.settings.llm_base_url, temperature=0, timeout=45, max_retries=1, max_tokens=self.settings.llm_max_output_tokens)
         if self.settings.llm_provider != "groq":
             raise RuntimeError("The Schema Markup Generator requires the configured Groq provider.")
         api_key = (
@@ -39,13 +42,21 @@ class SchemaInterpreter:
         if not api_key or not model_name:
             raise RuntimeError("The configured Groq model or API key is missing.")
         is_qwen = model_name.startswith("qwen/")
+        # Providers reserve `max_tokens` against the plan's output-tokens-per-minute
+        # allowance before running the request, so a budget above a free-tier
+        # account's ceiling is refused outright regardless of the page's real size.
+        # This one call has to describe every entity and property in one JSON
+        # response, which genuinely needs more room than the shared per-agent
+        # ceiling — capping it there caused truncated, unparseable JSON instead.
+        # A moderate dedicated budget accepts slightly higher rate-limit risk in
+        # exchange for actually completing the response.
         return ChatGroq(
             api_key=api_key,
             model=model_name,
             temperature=0,
             timeout=60,
             max_retries=4,
-            max_tokens=4_000,
+            max_tokens=max(self.settings.llm_max_output_tokens, 1500),
             reasoning_effort="none" if is_qwen else "low",
             reasoning_format="hidden",
         )

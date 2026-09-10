@@ -149,7 +149,7 @@ class ReportWriter:
                 **common,
             )
         if self.settings.llm_provider == "openai":
-            return ChatOpenAI(api_key=api_key, **common)
+            return ChatOpenAI(api_key=api_key, base_url=self.settings.llm_base_url, **common)
         raise ValueError(f"Unsupported LLM provider: {self.settings.llm_provider}")
 
 

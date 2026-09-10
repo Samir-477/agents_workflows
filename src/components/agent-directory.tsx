@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { ArrowIcon, ClusterIcon, GlobeIcon, SearchIcon, SparkIcon } from "@/components/icons";
+import { ArrowIcon, SearchIcon } from "@/components/icons";
 import {
   agentCategories,
   agents,
@@ -12,11 +12,6 @@ import {
 
 function AgentCard({ agent }: { agent: AgentDefinition }) {
   const active = agent.status === "active";
-  const icon = agent.slug === "seo-audit"
-    ? <GlobeIcon className="h-5 w-5" />
-    : agent.slug === "keyword-cluster"
-      ? <ClusterIcon className="h-5 w-5" />
-      : <SparkIcon className="h-5 w-5" />;
   return (
     <article className="flex min-h-[270px] flex-col rounded-[22px] border border-[#dfdedb] bg-white p-7 transition hover:-translate-y-0.5 hover:border-[#c9c7c2] hover:shadow-[0_18px_50px_rgba(26,26,36,0.07)]">
       <div className="flex items-start justify-between gap-4">
@@ -33,12 +28,7 @@ function AgentCard({ agent }: { agent: AgentDefinition }) {
           {active ? "Live" : "Coming soon"}
         </span>
       </div>
-      <div className={`mt-5 flex h-11 w-11 items-center justify-center rounded-xl ${agent.slug === "keyword-cluster" ? "bg-[#ebe9ff] text-[#5145dc]" : "bg-[#fff0eb] text-[#e34a2b]"}`}>
-        {icon}
-      </div>
-      <h3 className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-[#11121a]">
-        {agent.name}
-      </h3>
+      <h3 className="mt-7 text-2xl font-semibold leading-tight tracking-[-0.03em] text-[#11121a]">{agent.name}</h3>
       <p className="mt-3 flex-1 text-[16px] leading-7 text-[#62626c]">
         {agent.description}
       </p>

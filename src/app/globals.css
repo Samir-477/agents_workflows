@@ -21,6 +21,23 @@ body {
   outline-offset: 3px;
 }
 
+@keyframes diagnosis-loading {
+  0% { width: 8%; transform: translateX(-120%); }
+  55% { width: 58%; }
+  100% { width: 28%; transform: translateX(360%); }
+}
+
+.diagnosis-loading-bar {
+  animation: diagnosis-loading 1.55s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diagnosis-loading-bar {
+    width: 55%;
+    animation: none;
+  }
+}
+
 /* Run pages mirror the supplied long-form reference pages. */
 .reference-run-page {
   min-height: 100vh;

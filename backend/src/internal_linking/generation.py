@@ -19,13 +19,19 @@ class InternalLinkRefiner:
         self.model_resolver = model_resolver
 
     def _model(self) -> BaseChatModel:
+        if self.settings.llm_provider == "openai":
+            from langchain_openai import ChatOpenAI
+            return ChatOpenAI(api_key=self.settings.llm_api_key, model=self.settings.llm_model, base_url=self.settings.llm_base_url, temperature=0, timeout=45, max_retries=1, max_tokens=self.settings.llm_max_output_tokens)
         if self.settings.llm_provider != "groq":
             raise RuntimeError("Internal-link copy refinement requires the configured Groq provider.")
         api_key = self.api_key_resolver("groq", self.settings.llm_api_key) if self.api_key_resolver else self.settings.llm_api_key
         model_name = self.model_resolver(self.settings.llm_model) if self.model_resolver else self.settings.llm_model
         if not api_key or not model_name:
             raise RuntimeError("The configured Groq model or API key is missing.")
-        return ChatGroq(api_key=api_key, model=model_name, temperature=0, timeout=60, max_retries=4, max_tokens=4_000, reasoning_effort="none" if model_name.startswith("qwen/") else "low", reasoning_format="hidden")
+        # Providers reserve `max_tokens` against the plan's output-tokens-per-minute
+        # allowance before running the request, so a budget above a free-tier
+        # account's ceiling is refused outright no matter how few candidates there are.
+        return ChatGroq(api_key=api_key, model=model_name, temperature=0, timeout=60, max_retries=4, max_tokens=self.settings.llm_max_output_tokens, reasoning_effort="none" if model_name.startswith("qwen/") else "low", reasoning_format="hidden")
 
     async def refine(self, candidates: list[LinkCandidate], business_description: str | None, audit_goal: str | None) -> LinkRefinementSet:
         model = self._model().with_structured_output(LinkRefinementSet, method="json_mode")

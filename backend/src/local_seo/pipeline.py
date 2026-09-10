@@ -23,7 +23,9 @@ def ground_profile(profile, prompt):
     strings = [profile.business_name, profile.phone, profile.hours, *profile.services, *profile.differentiators]
     for location in profile.locations:
         strings.extend([location.area, location.address, location.phone, location.hours, *location.local_proof])
-    if any(value and value.casefold() not in prompt.casefold() for value in strings):
+    def normalized(value):
+        return " ".join(value.casefold().split())
+    if any(value and normalized(value) not in normalized(prompt) for value in strings):
         raise ValueError("Some extracted business facts were not found in your brief. Please provide explicit business and branch details.")
     if len({location.area.casefold() for location in profile.locations}) != len(profile.locations):
         raise ValueError("Use one page per distinct area in this batch.")

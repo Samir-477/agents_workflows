@@ -252,6 +252,123 @@ Dual7's internal architecture.
 
 ## Current implementation decision and baseline
 
+### Resort Website Diagnosis (2026-09-09)
+
+Website Diagnosis is a top-level product workflow at `/diagnosis`; it is not an
+eleventh agent. One resort URL starts a durable case. The resort identity used
+for search research is derived from the captured H1 or title, with the URL slug
+as a deterministic fallback. A single bounded capture is saved and reused by all ten specialist agents.
+SERP evidence, keyword groups and the content brief flow through explicit
+dependencies; unrelated resort-page findings are excluded from the final case.
+
+Each task has its own persisted status, child-run identifier, recovery lease and
+retry boundary. At most two non-model tasks run concurrently and model tasks are
+serialized within a diagnosis. The browser advances one bounded task per API
+request, so a Vercel request does not hold the complete ten-agent pipeline open.
+An optional `python -m diagnosis.worker` process can advance the same saved queue.
+Successful work is retained when a failed task is retried.
+
+The browser currently starts one advance request at a time to avoid row-lock
+contention on transaction-pooled Supabase connections. Metadata, Local SEO and
+Keyword Clustering have diagnosis-specific URL assessment modes: they evaluate
+captured HTML and observed SERP evidence without requiring their standalone
+prompt-first generators. This keeps provider-specific JSON limits from blocking
+the management report while preserving those agents' relevant diagnostic work.
+
+The management report is assembled from validated structured results. Every
+finding identifies its primary agent, supporting agents, evidence, source URL,
+business relevance, owner, action and completion check. Proposed metadata,
+schema and content remain labelled drafts and are not presented as current-site
+faults. A Qwen/Groq or DeepSeek model may write a short introduction, but it
+cannot add findings and its evidence references are validated; the deterministic
+report remains authoritative. The same saved report drives the UI and on-demand
+PDF download. Server-HTML evidence does not yet include browser screenshots,
+mobile rendering or field performance data, and those limits remain visible.
+
+Evidence presentation version 2 separates a management finding from its proof
+and from technical provenance. Each retained finding shows the observed value,
+an excerpt where available, the page or search-result location, any comparison
+condition, confidence, source, and a repeatable verification step. Evidence IDs,
+timestamps and capture methods remain available as technical details rather than
+serving as the visible proof. JSON-LD extraction retains parser details and code
+excerpts; image extraction retains representative source/alt examples and can
+display the affected image. SERP proof is attributed to the captured Serper
+Google sample rather than to the audited page. Exact-phrase content gaps,
+fallback-brief ideas, sentence-length heuristics and similar weak signals remain
+agent observations instead of management findings. Completed version-1 reports
+can be rebuilt from saved task results without rerunning the ten agents.
+
+Management presentation version 3 gives every agent the same case-file format:
+issue identified, evidence explained with an example, management relevance,
+other findings, bulleted actions, responsible owner, timeframe, limitation and
+technical details. After deterministic findings and evidence packs are built,
+the configured model may edit only the primary evidence-owning cases in small,
+independently validated calls. Code retains finding/evidence references,
+priorities, owners and timeframes. Model numbers and URLs must occur in the
+source pack; evidence examples must be verbatim or are discarded; unsupported
+ranking, traffic, booking and revenue claims reject that case only. Supporting
+and no-finding cases use the same deterministic format. Valid model cases are
+cached with the report, provider failure never blocks the report, and wording
+can be regenerated without rerunning the ten diagnostic agents. Live testing
+showed the configured DeepSeek endpoint exceeded the editorial latency budget,
+while the selected Groq/Qwen model completed bounded case edits; this report
+stage therefore uses the diagnosis's selected provider rather than silently
+preferring DeepSeek.
+
+Supporting and planning agents that establish no website fault use an
+`Assessment outcome` label and retain agent-specific observations and next steps.
+They do not receive a generic website-fault statement or baseline action. Evidence
+cards suppress repeated meaning, observation, example and excerpt text so each
+visible field contributes distinct information.
+
+Management presentation version 4 adds an identity-resolution gate before any
+search, keyword or content task can influence the report. Lodging schema names,
+the URL slug, the page title and Open Graph title are corroborated; a promotional
+H1 is rejected when it does not identify the requested property. Every downstream
+task records the identity or query it used. Outputs produced from a stale or
+conflicting identity are marked `rejected`, excluded from findings and proposed
+outputs, and rerun from a fresh capture with corrected inputs.
+
+Extraction excludes tracking pixels, noscript beacons and explicitly tiny images
+from customer-image accessibility totals while recording how many were excluded.
+The report assigns one primary owner to each validated issue and treats other
+agents as supporting checks, avoiding duplicate cases and duplicate actions. The
+PDF contains detailed case files only for validated primary findings plus a compact
+ten-agent accountability table. It uses embedded Unicode fonts, human-readable
+source labels and quality states so failed or rejected agent output cannot appear
+as verified website evidence.
+
+The management UI now separates confirmed issues, review items, opportunities
+and rejected outputs. It renders detailed case files only for agents that own a
+validated finding, then records all ten agents in a compact accountability table.
+Issue-specific proof includes structured-data pass/fail comparisons, metadata
+length visualization, representative image evidence and explicit completion
+checks. External evidence images load only after a user action so opening a
+report does not automatically contact the audited website.
+
+Management presentation version 5 uses the website as the primary review surface.
+It presents a compact executive summary and prioritized action list, followed by
+expandable finding-level cases and one ten-agent contribution table. Evidence uses
+finding-specific views for JSON parsing, schema identity conflicts, metadata,
+image alternatives and SERP samples. Suggested fixes are derived from captured
+facts and labelled for review. Calendar deadlines are not inferred; workflow
+labels describe sequence and validation requirements. The report editor makes one
+validated batch model call for primary cases, with deterministic wording as the
+fallback. The PDF is generated from the same findings and omits duplicated action
+sections.
+
+Legacy reports below version 4 are visibly blocked from management use. Their
+upgrade action starts a fresh capture and reruns all ten agents rather than
+rewriting old conclusions. Resort identity requires corroboration between the
+URL and schema, title or H1. A conflicting LodgingBusiness name is rejected as
+an identity source and becomes its own direct structured-data finding.
+
+Production authentication uses an HMAC-signed, expiring session shared by the
+Next.js and FastAPI layers. Production fails closed when the session secret or
+admin credentials are missing. Diagnosis ownership is stored server-side and
+checked for history, reads, mutations, evidence and PDF downloads. The old fixed
+cookie is accepted only by the local development/test compatibility path.
+
 Decision recorded on 2026-09-05: the seventh persisted workflow is an
 evidence-first AI Visibility Audit Agent. This is our implementation decision,
 informed by the supplied product copy; it is not a claim about Dual7's private
@@ -309,15 +426,15 @@ Next.js + Python layout and deploys as one project from the repository root.
   `NEXT_PUBLIC_API_URL` remains a local-development override only.
 - Production state lives in Supabase rather than process memory or Vercel's filesystem.
 - The frontend uses the Stellar brand with the supplied orange/indigo visual direction.
-- A deliberately small demo login (`admin@gmail.com` / `admin123`) sets an HTTP-only cookie and protects the agent workspace. This is not production authentication.
+- Local development may use the documented demo credential. Production requires environment-supplied credentials and a shared signing secret; both application layers verify an expiring HMAC-signed HTTP-only session.
 - `/agents` provides a searchable catalogue with one live SEO Audit Agent and clearly labelled coming-soon placeholders for future agents.
 - The SEO agent page explains the capability, accepts the URL and audit context, submits to FastAPI, starts a bounded processing invocation, polls persisted stages, and publishes the completed structured report in the UI.
 - Audit context remains optional and is available in a closed-by-default form section containing business description, important URLs, audit reason, and page limit.
 - `/agents/history` is a shared, filterable history for all registered agents. It
   currently combines SEO audit and metadata-generator runs with search,
   pagination, result links, agent-aware deletion, and SEO PDF downloads.
-  Production uses Supabase; in the demo-auth MVP this history is workspace-wide
-  rather than user-specific.
+  Production uses Supabase. Website diagnoses carry an owner subject and every
+  diagnosis read, mutation, evidence response and PDF download enforces it.
 - Completed reports can be downloaded as generated PDF files from the report view or history page.
 
 Decision recorded on 2026-08-31: the second backend workflow is a prompt-first
@@ -371,15 +488,15 @@ protected `/agents/settings` page.
 - The current settings surface exposes Groq only. Groq keys saved through the
   UI are stored with Supabase Vault; application tables retain only the Vault
   UUID and a four-character suffix.
-- Settings APIs require the current demo-session cookie, never return full key
+- Settings APIs require the signed admin session, never return full key
   values, and keep deployment environment variables as a fallback.
 - Agent model clients resolve the current Vault override at run time, so a saved
   replacement applies to new runs without redeployment or process restart.
 - The active Groq model is also stored in Supabase and resolved at run time.
   The current allowlist contains Qwen 3.6 27B, Qwen 3.8 27B, GPT-OSS 120B, and
   GPT-OSS 20B, with production and preview status shown in the UI.
-- The current Groq environment key was migrated into Vault. Production
-  authentication remains required before this demo workspace is multi-user.
+- The current Groq environment key was migrated into Vault. A full external
+  identity-provider integration remains required before adding multiple roles.
 
 Decision recorded on 2026-09-01: the third persisted workflow is a prompt-first
 Schema Markup Generator. This is our project implementation based on the supplied
@@ -512,7 +629,7 @@ The automated tests cover URL validation, extraction, rule evidence, scoring, th
 
 Important remaining MVP work includes:
 
-- production authentication and user/workspace persistence;
+- external identity-provider integration and organisation-level role management;
 - selective Playwright rendering for JavaScript-heavy and mobile pages;
 - stronger sitemap-index handling;
 - more complete technical, schema, internal-link, content, and AEO rules;
@@ -594,7 +711,7 @@ Every result stays `needs_review`; there is no automated approval or publishing.
 This MVP does not implement visual page restyling, domain deployment, real lead
 forms/notifications, a seven-stage governance process, or review verification.
 Metadata length checks and duplicate-text similarity are heuristics, not ranking
-or search-display guarantees. Shared demo authentication remains non-production.
+or search-display guarantees. Local demo credentials remain development-only.
 
 Optional listing lookup is keyless and uses public OpenStreetMap open data: the
 area string is resolved to a bounding box with Nominatim, then Overpass returns

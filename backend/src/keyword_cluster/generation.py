@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Callable
 
@@ -28,7 +29,10 @@ class KeywordClusterGenerator:
         self.api_key_resolver = api_key_resolver
         self.model_resolver = model_resolver
 
-    def _model(self) -> BaseChatModel:
+    def _model(self, *, min_tokens: int = 0) -> BaseChatModel:
+        if self.settings.llm_provider == "openai":
+            from langchain_openai import ChatOpenAI
+            return ChatOpenAI(api_key=self.settings.llm_api_key, model=self.settings.llm_model, base_url=self.settings.llm_base_url, temperature=0, timeout=45, max_retries=1, max_tokens=self.settings.llm_max_output_tokens)
         if self.settings.llm_provider != "groq":
             raise RuntimeError("The Keyword Cluster Agent requires the configured Groq provider.")
         api_key = self.api_key_resolver("groq", self.settings.llm_api_key) if self.api_key_resolver else self.settings.llm_api_key
@@ -36,9 +40,14 @@ class KeywordClusterGenerator:
         if not api_key or not model_name:
             raise RuntimeError("The configured Groq model or API key is missing.")
         is_qwen = model_name.startswith("qwen/")
+        # Providers reserve `max_tokens` against the plan's output-tokens-per-minute
+        # allowance before running the request. 8,000 always exceeded a free-tier
+        # account's ceiling outright — this had never been exercised by a large
+        # keyword batch on that tier before, only ever appearing to work on the
+        # small test lists this agent happened to be run with so far.
         return ChatGroq(
             api_key=api_key, model=model_name, temperature=0, timeout=90,
-            max_retries=4, max_tokens=8_000,
+            max_retries=4, max_tokens=max(self.settings.llm_max_output_tokens, min_tokens),
             reasoning_effort="none" if is_qwen else "low", reasoning_format="hidden",
         )
 
@@ -71,7 +80,12 @@ KEYWORDS:
     async def consolidate(
         self, keywords: list[KeywordItem], candidates: list[CandidateCluster]
     ) -> ConsolidatedClusterSet:
-        model = self._model().with_structured_output(ConsolidatedClusterSet, method="json_mode")
+        # This call's clusters array alone can fill the shared per-agent ceiling
+        # (each cluster carries up to 1,000 chars of reasoning), leaving no room
+        # for the required trailing strategy_summary field — the model then emits
+        # otherwise-valid JSON that Pydantic rejects for a missing field. A
+        # dedicated higher budget, same fix as Schema Markup's single JSON call.
+        model = self._model(min_tokens=1500).with_structured_output(ConsolidatedClusterSet, method="json_mode")
         schema = json.dumps(ConsolidatedClusterSet.model_json_schema(), ensure_ascii=True)
         source = [{"keyword": item.keyword, "volume": item.volume} for item in keywords]
         draft = [item.model_dump(mode="json") for item in candidates]

@@ -98,7 +98,7 @@ class MetadataGenerator:
                 **common,
             )
         if self.settings.llm_provider == "openai":
-            return ChatOpenAI(api_key=api_key, max_tokens=budget, **common)
+            return ChatOpenAI(api_key=api_key, base_url=self.settings.llm_base_url, max_tokens=budget, **common)
         raise RuntimeError(f"Unsupported LLM provider: {self.settings.llm_provider}")
 
     def _structured_model(self, schema, max_output_tokens: int | None = None):
@@ -170,7 +170,9 @@ class MetadataGenerator:
         "user. Preserve factual qualifiers exactly: a price described as 'starts at' or "
         "'from' must retain a starting or from qualifier everywhere it appears. Each "
         "rationale must explain the copy in at most 140 characters, and must never narrate "
-        "your own revisions or mention validation."
+        "your own revisions or mention validation. `intent` and `angle` are short labels, "
+        "not sentences: 3-6 words each, under 60 characters, for example 'Location & Brand "
+        "Focus' or 'Amenity Highlights'."
     )
 
     @staticmethod

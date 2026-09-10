@@ -8,7 +8,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 
-from seo_audit.models import ContentSection, HeadingRecord, LinkRecord, PageRecord
+from seo_audit.models import ContentSection, HeadingRecord, ImageEvidence, JsonLdErrorDetail, LinkRecord, PageRecord
 
 
 WHITESPACE = re.compile(r"\s+")
@@ -53,6 +53,8 @@ def extract_page(
     meta_description = clean_text(
         str(description_tag.get("content", "")) if description_tag else None
     )
+    open_graph_tag = soup.find("meta", attrs={"property": lambda value: value and value.lower() == "og:title"})
+    open_graph_title = clean_text(str(open_graph_tag.get("content", "")) if open_graph_tag else None)
 
     canonical_tag = soup.find(
         "link",
@@ -134,29 +136,72 @@ def extract_page(
             links.append(record)
 
     images = soup.find_all("img")
+    reviewed_images = []
+    excluded_images = 0
     missing_alt = 0
     empty_alt = 0
     generic_alt = 0
+    image_evidence: list[ImageEvidence] = []
+    def retain_image_evidence(issue: str) -> bool:
+        return sum(item.issue == issue for item in image_evidence) < 5
+
     for image in images:
+        src = str(image.get("src") or image.get("data-src") or "").strip() or None
+        src = urljoin(final_url, src) if src else None
+        if _is_non_content_image(image, src):
+            excluded_images += 1
+            continue
+        reviewed_images.append(image)
         if not image.has_attr("alt"):
             missing_alt += 1
+            if retain_image_evidence("missing_alt"):
+                image_evidence.append(ImageEvidence(src=src, alt=None, issue="missing_alt"))
             continue
         alt = clean_text(str(image.get("alt", "")))
         if not alt:
             empty_alt += 1
+            if retain_image_evidence("empty_alt"):
+                image_evidence.append(ImageEvidence(src=src, alt="", issue="empty_alt"))
         elif _is_generic_alt(alt):
             generic_alt += 1
+            if retain_image_evidence("generic_alt"):
+                image_evidence.append(ImageEvidence(src=src, alt=alt, issue="generic_alt"))
 
     schema_types: list[str] = []
+    schema_names: list[str] = []
     json_ld_errors: list[str] = []
+    json_ld_error_details: list[JsonLdErrorDetail] = []
     for index, script in enumerate(soup.find_all("script", attrs={"type": "application/ld+json"}), start=1):
         raw = script.string or script.get_text()
         try:
             payload = json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
-            json_ld_errors.append(f"JSON-LD block {index} could not be parsed.")
+        except (json.JSONDecodeError, TypeError) as exc:
+            message = f"JSON-LD block {index} could not be parsed."
+            json_ld_errors.append(message)
+            detail = str(exc) if isinstance(exc, json.JSONDecodeError) else "The block did not contain valid JSON text."
+            source = str(raw or "")
+            if isinstance(exc, json.JSONDecodeError):
+                start = max(0, exc.pos - 220)
+                end = min(len(source), exc.pos + 220)
+                excerpt = source[start:end].strip()
+                if start:
+                    excerpt = "..." + excerpt
+                if end < len(source):
+                    excerpt += "..."
+                correction_start = max(0, exc.pos - 90)
+                correction_end = min(len(source), exc.pos + 90)
+                original_context = source[correction_start:correction_end]
+                invalid_character = source[exc.pos:exc.pos + 1]
+                escaped_character = json.dumps(invalid_character, ensure_ascii=False)[1:-1] if invalid_character else ""
+                corrected_context = original_context[:exc.pos - correction_start] + escaped_character + original_context[exc.pos - correction_start + len(invalid_character):]
+                corrected_excerpt = "BEFORE\n" + original_context + "\n\nAFTER\n" + corrected_context
+            else:
+                excerpt = WHITESPACE.sub(" ", source).strip()[:500]
+                corrected_excerpt = None
+            json_ld_error_details.append(JsonLdErrorDetail(block=index, message=detail, excerpt=excerpt, corrected_excerpt=corrected_excerpt))
             continue
         schema_types.extend(_collect_schema_types(payload))
+        schema_names.extend(_collect_lodging_names(payload))
 
     content_sections: list[ContentSection] = []
     active_heading: str | None = None
@@ -227,12 +272,17 @@ def extract_page(
         content_sections=content_sections,
         main_text=full_main_text[:main_text_limit],
         main_text_truncated=len(full_main_text) > main_text_limit,
-        images_total=len(images),
+        images_total=len(reviewed_images),
+        images_excluded_from_alt_review=excluded_images,
         images_missing_alt=missing_alt,
         images_empty_alt=empty_alt,
         images_generic_alt=generic_alt,
+        image_evidence=image_evidence,
         schema_types=list(dict.fromkeys(schema_types)),
+        schema_names=list(dict.fromkeys(schema_names)),
+        open_graph_title=open_graph_title,
         json_ld_errors=json_ld_errors,
+        json_ld_error_details=json_ld_error_details,
         has_viewport=soup.find("meta", attrs={"name": "viewport"}) is not None,
         content_hash=hashlib.sha256(visible_text.lower().encode("utf-8")).hexdigest()
         if visible_text
@@ -248,6 +298,18 @@ _GENERIC_ALT_WORDS = {
 }
 _FILENAME_ALT = re.compile(r"^[\w\-. ]+\.(?:jpe?g|png|gif|webp|svg|avif)$", re.IGNORECASE)
 _NUMBERED_ALT = re.compile(r"^(?:image|img|photo|picture|slide|banner|gallery)[\s_-]*\d+$", re.IGNORECASE)
+_TRACKING_IMAGE = re.compile(r"(?:facebook\.com/tr(?:[/?]|$)|google-analytics|doubleclick|analytics|tracking[-_/]?pixel|pixel\.gif)", re.IGNORECASE)
+
+
+def _is_non_content_image(image, src: str | None) -> bool:
+    """Exclude analytics pixels and other non-visible instrumentation from alt checks."""
+    if image.find_parent("noscript") is not None or (src and _TRACKING_IMAGE.search(src)):
+        return True
+    def dimension(name):
+        match = re.search(r"\d+", str(image.get(name) or ""))
+        return int(match.group()) if match else None
+    width, height = dimension("width"), dimension("height")
+    return width is not None and height is not None and width <= 2 and height <= 2
 
 
 def _is_generic_alt(alt: str) -> bool:
@@ -306,3 +368,17 @@ def _collect_schema_types(value: object) -> Iterable[str]:
     elif isinstance(value, list):
         for child in value:
             yield from _collect_schema_types(child)
+
+
+def _collect_lodging_names(value: object) -> Iterable[str]:
+    if isinstance(value, dict):
+        raw_type = value.get("@type")
+        types = [raw_type] if isinstance(raw_type, str) else raw_type if isinstance(raw_type, list) else []
+        name = clean_text(str(value.get("name", "")))
+        if name and any(str(item).casefold() in {"lodgingbusiness", "hotel", "resort"} for item in types):
+            yield name
+        for child in value.values():
+            yield from _collect_lodging_names(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _collect_lodging_names(child)

@@ -28,7 +28,7 @@ class LocalGenerator:
         if provider == "groq":
             return ChatGroq(reasoning_effort="none" if name.startswith("qwen/") else "low", reasoning_format="hidden", **common)
         if provider == "openai":
-            return ChatOpenAI(**common)
+            return ChatOpenAI(base_url=self.settings.llm_base_url, **common)
         raise RuntimeError("Unsupported model provider.")
 
     async def _ask(self, schema, instruction, payload, max_tokens):

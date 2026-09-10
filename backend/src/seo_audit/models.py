@@ -92,6 +92,19 @@ class HeadingRecord(BaseModel):
     text: str
 
 
+class ImageEvidence(BaseModel):
+    src: str | None = None
+    alt: str | None = None
+    issue: Literal["missing_alt", "empty_alt", "generic_alt"]
+
+
+class JsonLdErrorDetail(BaseModel):
+    block: int
+    message: str
+    excerpt: str
+    corrected_excerpt: str | None = None
+
+
 class PageRecord(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     audit_id: str
@@ -115,13 +128,18 @@ class PageRecord(BaseModel):
     main_text: str = ""
     main_text_truncated: bool = False
     images_total: int = 0
+    images_excluded_from_alt_review: int = 0
     images_missing_alt: int = 0
     images_empty_alt: int = 0
     # Images whose alt attribute is present but carries no information ("Gallery
     # Image", "image1.jpg"). These pass a missing-alt check while helping nobody.
     images_generic_alt: int = 0
+    image_evidence: list[ImageEvidence] = Field(default_factory=list)
     schema_types: list[str] = Field(default_factory=list)
+    schema_names: list[str] = Field(default_factory=list)
+    open_graph_title: str | None = None
     json_ld_errors: list[str] = Field(default_factory=list)
+    json_ld_error_details: list[JsonLdErrorDetail] = Field(default_factory=list)
     has_viewport: bool = False
     content_hash: str | None = None
     # A 64-bit SimHash of the visible text, stored as a decimal string. An exact hash

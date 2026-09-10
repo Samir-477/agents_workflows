@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { LocalSEOAgentPage } from "@/components/local-seo-agent-page";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { AuditForm } from "@/components/audit-form";
 import { CheckIcon } from "@/components/icons";
@@ -20,6 +20,7 @@ export function generateStaticParams() {
 
 export default async function AgentPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  if (slug === "resort-orchestrator") redirect("/diagnosis");
   const agent = getAgent(slug);
   if (!agent) notFound();
   if (slug === "local-seo") return <LocalSEOAgentPage />;

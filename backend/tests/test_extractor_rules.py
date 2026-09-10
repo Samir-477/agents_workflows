@@ -41,6 +41,8 @@ def test_extracts_facts_and_rules_are_evidence_backed():
     assert page.schema_types == ["Service"]
     assert page.internal_links[0].url == "https://example.com/about"
     assert page.images_missing_alt == 1
+    assert page.image_evidence[0].issue == "missing_alt"
+    assert page.image_evidence[0].src == "https://example.com/team.jpg"
 
     findings = audit_pages("audit-1", [page])
     rule_ids = {finding.rule_id for finding in findings}
@@ -50,6 +52,22 @@ def test_extracts_facts_and_rules_are_evidence_backed():
     scored = score_findings(findings, ["https://example.com/service"])
     assert scored[0].severity in {Severity.CRITICAL, Severity.IMPORTANT}
     assert scored[0].score > 0
+
+
+def test_tracking_pixels_are_excluded_from_image_alt_findings():
+    html = """<html><head><title>Stay</title><meta name="viewport" content="width=device-width">
+    <link rel="canonical" href="/stay"><script type="application/ld+json">
+    {"@type":"LodgingBusiness","name":"Sterling Lake Palace Alleppey"}</script></head><body>
+    <h1>Explore the backwaters</h1><img src="gallery.jpg" alt="Gallery Image">
+    <noscript><img src="https://www.facebook.com/tr?id=1&ev=PageView"></noscript>
+    <img src="pixel.gif" width="1" height="1"><p>""" + "Resort details. " * 30 + "</p></body></html>"
+    page = extract_page(audit_id="pixels", requested_url="https://example.com/stay", final_url="https://example.com/stay",
+                        status_code=200, content_type="text/html", html=html, depth=0, scope_origin="https://example.com")
+    assert page.images_total == 1
+    assert page.images_excluded_from_alt_review == 2
+    assert page.images_missing_alt == 0
+    assert page.images_generic_alt == 1
+    assert page.schema_names == ["Sterling Lake Palace Alleppey"]
 
 
 def test_repeated_page_issues_are_grouped_and_product_schema_is_checked():

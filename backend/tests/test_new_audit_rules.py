@@ -80,6 +80,14 @@ def test_empty_alt_is_reviewed_separately_from_a_missing_attribute():
     assert findings["missing_image_alt"].confidence.value == "high"
 
 
+def test_image_evidence_keeps_rare_missing_alt_after_many_generic_examples():
+    generic = "".join(f"<img src='{index}.jpg' alt='Gallery Image'>" for index in range(20))
+    extracted = page(f"{ORIGIN}/a", "<h1>Gallery</h1>" + generic + "<img src='missing.jpg'>" + BODY, HEAD)
+    issues = [item.issue for item in extracted.image_evidence]
+    assert issues.count("generic_alt") == 5
+    assert "missing_alt" in issues
+
+
 def test_extraction_retains_ordered_headings_external_links_and_schema_errors():
     body = (
         "<h1>CRM guide</h1><h2>Choose a plan</h2><h3>Compare limits</h3>"
@@ -95,6 +103,10 @@ def test_extraction_retains_ordered_headings_external_links_and_schema_errors():
     assert extracted.main_text.startswith("Detailed CRM comparison guidance")
     assert extracted.main_text_truncated is False
     assert extracted.json_ld_errors == ["JSON-LD block 1 could not be parsed."]
+    assert extracted.json_ld_error_details[0].block == 1
+    assert "{invalid}" in extracted.json_ld_error_details[0].excerpt
+    assert "BEFORE" in extracted.json_ld_error_details[0].corrected_excerpt
+    assert "AFTER" in extracted.json_ld_error_details[0].corrected_excerpt
     assert "invalid_json_ld" in rule_ids([extracted])
 
 

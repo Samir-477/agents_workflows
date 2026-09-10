@@ -14,6 +14,8 @@ from agent_runtime.provider_settings import (
     ModelSelectionUpdate,
 )
 from agent_runtime.registry import AgentRegistration
+from diagnosis.api import create_router as create_diagnosis_router
+from diagnosis.storage import DiagnosisRepository, MemoryDiagnosisRepository
 from local_seo.api import create_local_router
 from local_seo.generation import LocalGenerator
 from local_seo.storage import LocalRepository, MemoryLocalRepository
@@ -33,11 +35,14 @@ from internal_linking.storage import InternalLinkRepository, MemoryInternalLinkR
 from meta_generator.api import create_metadata_router
 from meta_generator.generation import MetadataGenerator
 from meta_generator.storage import MetadataGenerationRepository
+from resort_orchestrator.workflow import Dependencies as OrchestratorDependencies
 from schema_generator.api import create_schema_router
 from schema_generator.generation import SchemaInterpreter
 from schema_generator.storage import MemorySchemaGenerationRepository, SchemaGenerationRepository
 from seo_audit.api import create_app as create_seo_app
 from seo_audit.config import Settings
+from seo_audit.crawler import SiteCrawler
+from seo_audit.reporting import ReportWriter
 from seo_audit.storage import AuditRepository
 from serp_competitor.api import create_serp_router
 from serp_competitor.client import SerperClient
@@ -66,6 +71,7 @@ def create_app(
     serp_crawler=None,
     content_optimizer_repository=None,
     content_optimizer_crawler=None,
+    diagnosis_repository=None,
 ) -> FastAPI:
     """Compose independently implemented agents into one deployable API."""
 
@@ -144,8 +150,33 @@ def create_app(
         api_key_resolver=provider_repository.resolve_api_key,
         model_resolver=provider_repository.resolve_model,
     )
+    orchestrator_deps = OrchestratorDependencies(
+        settings=settings,
+        crawler=SiteCrawler(settings),
+        audit_repository=audit_repository,
+        report_writer=ReportWriter(settings, provider_repository.resolve_api_key, provider_repository.resolve_model),
+        visibility_repository=visibility_repository,
+        internal_link_repository=internal_link_repository,
+        internal_link_refiner=internal_link_refiner,
+        serp_repository=serp_repository,
+        keyword_cluster_repository=keyword_cluster_repository,
+        keyword_cluster_generator=keyword_cluster_generator,
+        metadata_repository=metadata_repository,
+        metadata_generator=metadata_generator,
+        schema_repository=schema_repository,
+        schema_interpreter=schema_interpreter,
+        content_brief_repository=content_brief_repository,
+        content_brief_generator=content_brief_generator,
+        local_repository=local_repository,
+        local_generator=local_generator,
+        content_optimizer_repository=content_optimizer_repository,
+    )
     original_lifespan = app.router.lifespan_context
+    diagnosis_repository = diagnosis_repository or (DiagnosisRepository(settings.database_url) if settings.database_url else MemoryDiagnosisRepository())
+    app.state.diagnosis_repository = diagnosis_repository
+    app.state.diagnosis_dependencies = orchestrator_deps
     registrations = [
+        AgentRegistration(slug="website-diagnosis", router=create_diagnosis_router(diagnosis_repository, orchestrator_deps), initialize=diagnosis_repository.initialize),
         AgentRegistration(
             slug="content-optimizer",
             router=create_content_optimizer_router(
@@ -234,7 +265,8 @@ def create_app(
         )
 
     def require_admin(request: Request) -> None:
-        if request.cookies.get("stellar_demo_session") != "stellar-admin":
+        from agent_runtime.session import session_subject
+        if not session_subject(request.cookies.get("stellar_demo_session")):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Sign in to manage provider API keys.",
