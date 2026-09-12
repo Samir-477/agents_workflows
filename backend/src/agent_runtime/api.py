@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request, status
 
 from agent_runtime.history import AgentRunHistoryResponse, AgentRunHistoryService
+from agent_runtime.postgres import is_transient_database_error
 from agent_runtime.provider_settings import (
     MemoryProviderCredentialRepository,
     ProviderCredentialRepository,
@@ -338,9 +340,15 @@ def create_app(
     @asynccontextmanager
     async def combined_lifespan(application: FastAPI):
         async with original_lifespan(application):
-            for registration in registrations:
-                registration.initialize()
-            provider_repository.initialize()
+            for initialize in [*(registration.initialize for registration in registrations), provider_repository.initialize]:
+                for attempt in range(3):
+                    try:
+                        await asyncio.to_thread(initialize)
+                        break
+                    except Exception as error:
+                        if attempt == 2 or not is_transient_database_error(error):
+                            raise
+                        await asyncio.sleep(0.25 * (attempt + 1))
             yield
 
     app.router.lifespan_context = combined_lifespan

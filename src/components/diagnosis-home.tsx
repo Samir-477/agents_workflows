@@ -1,42 +1,59 @@
 "use client";
-import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { diagnosisRequest, type Diagnosis, type HistoryItem } from "@/lib/diagnosis-api";
+import { agents } from "@/data/agents";
+import { diagnosisRequest, type Diagnosis } from "@/lib/diagnosis-api";
+
+const dependencies:Record<string,string[]>={
+  keyword_cluster:["serp_competitor"],
+  content_brief:["serp_competitor","keyword_cluster"],
+  content_optimizer:["serp_competitor","keyword_cluster","content_brief"],
+};
+
+const activeAgents=agents.filter(agent=>agent.status==="active"&&agent.diagnosisId);
+const groups=(["SEO","AEO","GEO"] as const).map(engine=>({category:`${engine} Engine`,items:activeAgents.filter(agent=>agent.engine===engine)})).filter(group=>group.items.length);
+
+function withDependencies(values:Set<string>) {
+  const expanded=new Set(values);
+  let changed=true;
+  while(changed){changed=false;for(const id of [...expanded])for(const dependency of dependencies[id]||[])if(!expanded.has(dependency)){expanded.add(dependency);changed=true;}}
+  return expanded;
+}
 
 export function DiagnosisHome() {
-  const router = useRouter();
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => { diagnosisRequest<HistoryItem[]>("").then(setHistory).catch(e => setError(e.message)); }, []);
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setError("");
-    const data = new FormData(event.currentTarget);
-    try {
-      const run = await diagnosisRequest<Diagnosis>("", { page_url: data.get("url"), audience: data.get("audience"), business_goal: data.get("goal"), page_limit: Number(data.get("limit")), country: data.get("country"), language: data.get("language"), model_provider: data.get("provider") });
-      router.push(`/diagnosis/${run.id}`);
-    } catch (e) { setError(e instanceof Error ? e.message : "Unable to start diagnosis"); setBusy(false); }
+  const router=useRouter();
+  const [selected,setSelected]=useState(()=>new Set(activeAgents.map(agent=>agent.diagnosisId!)));
+  const [error,setError]=useState("");
+  const [busy,setBusy]=useState(false);
+
+  function toggle(id:string) {
+    setSelected(current=>{
+      if(!current.has(id)) return withDependencies(new Set([...current,id]));
+      const next=new Set(current); next.delete(id);
+      let changed=true;
+      while(changed){changed=false;for(const candidate of [...next])if((dependencies[candidate]||[]).some(required=>!next.has(required))){next.delete(candidate);changed=true;}}
+      return next;
+    });
   }
-  const field = "mt-2 w-full rounded-xl border border-[#d6d1e1] bg-white px-4 py-3.5 text-sm font-normal shadow-sm transition placeholder:text-[#aaa4b2] hover:border-[#b8afd2] focus:border-[#6550cf] focus:outline-2 focus:outline-[#6550cf]/20";
-  return <main className="relative overflow-hidden px-5 py-10 sm:px-8 sm:py-14"><div className="pointer-events-none absolute -right-32 top-0 h-96 w-96 rounded-full bg-[#d9d1ff]/35 blur-3xl"/><div className="pointer-events-none absolute -left-40 top-80 h-80 w-80 rounded-full bg-[#d8e8ff]/35 blur-3xl"/><div className="relative mx-auto max-w-6xl">
-    <section className="grid items-center gap-10 lg:grid-cols-[1.1fr_.9fr]"><div><p className="text-xs font-semibold uppercase tracking-[.22em] text-[#5846bd]">Website Diagnosis</p><h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-[-.035em] text-[#252031] sm:text-6xl">One resort.<br/><span className="text-[#5a45c7]">Clear, defensible answers.</span></h1><p className="mt-6 max-w-2xl text-lg leading-8 text-[#66606f]">Ten specialists examine one resort page, retain the evidence that matters, and produce an action plan management can understand.</p><div className="mt-7 flex flex-wrap gap-3 text-sm"><span className="rounded-full border border-[#dcd5ef] bg-white/80 px-4 py-2">Evidence attached</span><span className="rounded-full border border-[#dcd5ef] bg-white/80 px-4 py-2">Actions prioritized</span><span className="rounded-full border border-[#dcd5ef] bg-white/80 px-4 py-2">PDF ready</span></div></div><div className="rounded-[28px] border border-[#ddd7eb] bg-[#33276d] p-7 text-white shadow-[0_24px_70px_rgba(37,28,73,.16)]"><p className="text-xs font-semibold uppercase tracking-[.18em] text-[#c9c0f3]">How the diagnosis works</p><ol className="mt-6 space-y-6">{[["01","Capture","Read the selected page and a controlled supporting sample."],["02","Diagnose","Run ten specialist checks against the same saved evidence."],["03","Decide","Translate verified faults into owners, fixes and completion checks."]].map(([number,title,detail])=><li key={number} className="flex gap-4"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10 text-xs font-bold text-[#c9c0f3]">{number}</span><div><p className="font-semibold">{title}</p><p className="mt-1 text-sm leading-6 text-[#ddd7fa]">{detail}</p></div></li>)}</ol></div></section>
-    <form onSubmit={submit} className="mt-12 grid gap-5 rounded-[28px] border border-[#ded9e8] bg-white p-6 shadow-[0_20px_60px_rgba(37,28,73,.08)] sm:grid-cols-2 sm:p-8"><div className="sm:col-span-2"><p className="text-xs font-semibold uppercase tracking-[.18em] text-[#6552aa]">Start a review</p><h2 className="mt-2 text-2xl font-semibold">Which resort page should we diagnose?</h2></div>
-      <label className="font-semibold sm:col-span-2">Resort page URL<input className={field} name="url" type="url" required maxLength={2048} placeholder="https://www.sterlingholidays.com/resorts-hotels/lake-palace-alleppey" /></label>
-      <p className="rounded-xl bg-[#f5f2fc] px-4 py-3 text-sm leading-6 text-[#5f586a] sm:col-span-2">The URL is enough to begin. Resort identity, relevant phrases and specialist inputs are prepared from the captured page.</p>
-      <details className="sm:col-span-2"><summary className="cursor-pointer text-sm font-semibold text-[#5846bd]">Optional diagnosis settings</summary><div className="mt-5 grid gap-5 sm:grid-cols-2">
-      <label className="font-semibold">Audience (optional)<input name="audience" maxLength={500} className={field} placeholder="Who should this resort page help?"/></label>
-      <label className="font-semibold">Business goal (optional)<input name="goal" maxLength={1000} className={field} placeholder="What should visitors be able to do?"/></label>
-      <label className="font-semibold">Page sample limit<select name="limit" defaultValue="8" className={field}><option value="1">Resort page only (limited linking evidence)</option><option value="8">Up to 8 pages, including the resort</option><option value="20">Up to 20 pages, including the resort</option></select></label>
-      <label className="font-semibold">Generation provider<select name="provider" className={field}><option value="configured">Configured model (Groq / Qwen)</option><option value="deepseek">DeepSeek (server configuration required)</option></select></label>
-      <label className="font-semibold">Search country code<input name="country" className={field} defaultValue="in" pattern="[A-Za-z]{2}" required maxLength={2}/></label>
-      <label className="font-semibold">Search language code<input name="language" className={field} defaultValue="en" pattern="[A-Za-z]{2}" required maxLength={2}/></label>
-      </div></details>
-      <p className="text-sm leading-6 text-[#706c7a] sm:col-span-2">Supporting pages provide context for this resort. Missing facts and incomplete checks stay visible, and every proposed website change remains subject to review.</p>
-      {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-red-700 sm:col-span-2">{error}</p>}
-      <button disabled={busy} className="flex items-center justify-center gap-3 rounded-xl bg-[#4839ac] px-6 py-4 font-semibold text-white shadow-sm transition hover:bg-[#3d2f99] disabled:opacity-70 sm:col-span-2">{busy&&<span className="h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white"/>}{busy ? "Preparing secure diagnosis…" : "Start resort diagnosis"}</button>
+
+  async function submit(event:FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if(!selected.size){setError("Select at least one agent.");return;}
+    setBusy(true);setError("");
+    const data=new FormData(event.currentTarget);
+    try {
+      const run=await diagnosisRequest<Diagnosis>("",{page_url:data.get("url"),audience:"",business_goal:"",page_limit:8,country:"in",language:"en",model_provider:"configured",run_mode:"diagnosis",selected_agents:[...selected]});
+      router.push(`/diagnosis/${run.id}`);
+    } catch(caught){setError(caught instanceof Error?caught.message:"Unable to start this run.");setBusy(false);}
+  }
+
+  return <main className="min-h-[calc(100vh-68px)] bg-[#f8fafb] px-5 py-12 sm:px-7"><div className="mx-auto max-w-[920px]"><p className="text-[11px] font-semibold uppercase tracking-[.22em] text-[#7a8286]">New run</p><h1 className="mt-4 text-4xl font-semibold tracking-[-.045em] text-[#121719]">Analyse a URL</h1><p className="mt-3 max-w-3xl text-base leading-7 text-[#70787c]">Point the suite at a resort page. Pick one specialist or run the complete diagnosis—the results are grouped into one saved management report.</p>
+    <form onSubmit={submit} className="mt-9 space-y-6"><section className="rounded-[22px] border border-[#dde2e0] bg-white p-6 shadow-[0_10px_30px_rgba(22,31,27,.06)]"><label htmlFor="diagnosis-url" className="text-[13px] font-semibold text-[#272c2e]">Page URL</label><input id="diagnosis-url" name="url" type="url" required maxLength={2048} placeholder="https://www.sterlingholidays.com/resorts-hotels/regalia-agra" className="mt-2.5 h-13 w-full rounded-full border border-[#dce1df] bg-white px-4 text-sm shadow-sm outline-none transition placeholder:text-[#92999c] focus:border-[#07814d] focus:ring-4 focus:ring-[#07814d]/10"/></section>
+      <section className="overflow-hidden rounded-[22px] border border-[#dde2e0] bg-white shadow-[0_10px_30px_rgba(22,31,27,.06)]"><header className="flex items-center justify-between border-b border-[#e4e7e6] px-6 py-5"><div><h2 className="text-base font-semibold">Agents</h2><p className="mt-1 text-xs text-[#71797d]">{selected.size} of {activeAgents.length} selected</p></div><button type="button" onClick={()=>setSelected(selected.size?new Set():new Set(activeAgents.map(agent=>agent.diagnosisId!)))} className="text-xs font-medium text-[#26302c] hover:text-[#007846]">{selected.size?"Clear all":"Select all"}</button></header>
+        {groups.map(group=><div key={group.category} className="border-b border-[#e4e7e6] px-5 py-6 last:border-b-0 sm:px-6"><p className="mb-4 text-[11px] font-semibold uppercase tracking-[.18em] text-[#7b8387]">{group.category}</p><div className="grid gap-1 sm:grid-cols-2">{group.items.map(agent=>{const id=agent.diagnosisId!;const checked=selected.has(id);return <button key={id} type="button" role="checkbox" aria-checked={checked} onClick={()=>toggle(id)} className={`flex min-h-17 items-start gap-3 rounded-[18px] px-3.5 py-3 text-left transition ${checked?"bg-[#f0f2f1]":"hover:bg-[#f8faf9]"}`}><span className={`mt-0.5 grid h-4.5 w-4.5 shrink-0 place-items-center rounded-full border text-[10px] ${checked?"border-[#007846] bg-[#007846] text-white":"border-[#2c9a6c] text-transparent"}`}>✓</span><span><b className="block text-sm text-[#1b2022]">{agent.name}</b><span className="mt-1 block text-xs leading-5 text-[#778084]">{agent.description}</span></span></button>;})}</div></div>)}
+      </section>
+      <div className="flex flex-wrap items-center justify-between gap-5"><p className="max-w-xl text-xs leading-5 text-[#747c80]">Evidence capture and report assembly run automatically. Selecting Content Brief or Content Optimizer also selects the research tasks they require.</p><button disabled={busy||!selected.size} className="flex min-w-40 items-center justify-center gap-3 rounded-full bg-[#007846] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#00683d] disabled:cursor-not-allowed disabled:opacity-50">{busy&&<span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"/>}{busy?"Starting…":`Run ${selected.size} agent${selected.size===1?"":"s"}`}</button></div>{error&&<p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
     </form>
-    <section className="mt-14"><div className="flex items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[.18em] text-[#6552aa]">Saved work</p><h2 className="mt-2 text-2xl font-semibold">Diagnosis history</h2></div>{history.length>0&&<span className="text-sm text-[#706c7a]">{history.length} saved</span>}</div><div className="mt-5 grid gap-4 md:grid-cols-2">{history.map(item => <Link key={item.id} href={`/diagnosis/${item.id}`} className="group rounded-2xl border border-[#e0dce7] bg-white p-5 shadow-[0_8px_25px_rgba(37,28,73,.04)] transition hover:-translate-y-0.5 hover:border-[#8b7bd4] hover:shadow-[0_14px_35px_rgba(37,28,73,.09)]"><div className="flex items-center justify-between gap-3"><span className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${item.status==="complete"?"bg-emerald-100 text-emerald-800":"bg-[#eeeaff] text-[#5540bd]"}`}>{item.status.replaceAll("_"," ")}</span><span className="text-[#8a8394] transition group-hover:translate-x-1">→</span></div><p className="mt-4 break-all font-medium leading-6">{item.url}</p><p className="mt-3 text-xs text-gray-500">{new Date(item.created_at).toLocaleString()}</p></Link>)}{!history.length && <p className="rounded-2xl border border-dashed border-[#d9d4e2] bg-white/60 p-6 text-sm text-gray-500 md:col-span-2">Your saved resort diagnoses will appear here.</p>}</div></section>
-    {busy&&<div className="fixed inset-0 z-50 grid place-items-center bg-[#1d173c]/65 px-5 backdrop-blur-sm" role="status" aria-live="polite"><div className="w-full max-w-md rounded-[28px] bg-white p-8 text-center shadow-2xl"><span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[#f0edff]"><span className="h-7 w-7 animate-spin rounded-full border-[3px] border-[#bdb3ec] border-t-[#5540bd]"/></span><h2 className="mt-5 text-2xl font-semibold">Setting up the diagnosis</h2><p className="mt-3 text-sm leading-6 text-[#6c6577]">Creating the saved run and preparing the resort page for all ten specialists.</p><div className="mt-6 h-1.5 overflow-hidden rounded-full bg-[#ece9f2]"><div className="diagnosis-loading-bar h-full rounded-full bg-[#5a45c7]"/></div></div></div>}
-  </div></main>;
+  </div>{busy&&<div className="fixed inset-0 z-50 grid place-items-center bg-[#0b1510]/55 px-5 backdrop-blur-sm" role="status"><div className="w-full max-w-sm rounded-[24px] bg-white p-8 text-center shadow-2xl"><span className="mx-auto block h-8 w-8 animate-spin rounded-full border-[3px] border-[#bed8ca] border-t-[#007846]"/><h2 className="mt-5 text-xl font-semibold">Creating your run</h2><p className="mt-2 text-sm leading-6 text-[#747c80]">Saving the URL and preparing {selected.size} selected specialists.</p></div></div>}</main>;
 }

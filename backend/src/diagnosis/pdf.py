@@ -130,7 +130,7 @@ def build_pdf(report):
             p("- " + finding["completion_criteria"])
         p("Limitation: " + str(management.get("limitation") or "The result is limited to the captured evidence."), "Evidence")
     story.append(PageBreak())
-    p("Ten-agent coverage", "Title")
+    p("Agent coverage", "Title")
     p("Every specialist has a recorded contribution. A completed assessment is not presented as a website fault unless its evidence passed the finding gate.")
     findings_by_agent = {}
     for finding in report["findings"]:

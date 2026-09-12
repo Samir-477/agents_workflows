@@ -1,93 +1,15 @@
-import { CheckIcon, SparkIcon } from "@/components/icons";
+import { CheckIcon, SearchIcon, SparkIcon } from "@/components/icons";
 import { LoginForm } from "@/components/login-form";
-import { StellarLogo } from "@/components/stellar-logo";
-
-const workspaceBenefits = [
-  "Run evidence-backed website audits",
-  "Keep every report in one searchable history",
-  "Download clear, client-ready results",
-];
 
 export default function LoginPage() {
-  return (
-    <main className="grid min-h-screen bg-[#f7f6f3] lg:grid-cols-[1.08fr_0.92fr]">
-      <section className="relative hidden overflow-hidden bg-[#171820] px-12 py-10 text-white lg:flex lg:flex-col lg:justify-between xl:px-16 xl:py-12">
-        <div className="absolute -right-32 -top-32 h-[430px] w-[430px] rounded-full bg-[#5a4df4]/35 blur-[90px]" />
-        <div className="absolute -bottom-44 -left-28 h-[440px] w-[440px] rounded-full bg-[#ff5738]/25 blur-[100px]" />
-        <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_35%,rgba(255,255,255,0.025)_35%,rgba(255,255,255,0.025)_50%,transparent_50%)] bg-[length:28px_28px] opacity-30" />
-
-        <div className="relative flex items-center justify-between">
-          <StellarLogo href="/login" inverse />
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white/55">
-            Agent workspace
-          </span>
-        </div>
-
-        <div className="relative max-w-[610px] py-12">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-[#ff8068] shadow-[0_12px_40px_rgba(0,0,0,0.16)]">
-            <SparkIcon className="h-6 w-6" />
-          </div>
-          <p className="mt-7 font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[#a9a2ff]">
-            One focused job at a time
-          </p>
-          <h1 className="mt-4 text-5xl font-semibold leading-[1.04] tracking-[-0.055em] xl:text-[58px]">
-            Specialist agents.
-            <br />
-            <span className="text-white/68">Useful results.</span>
-          </h1>
-          <p className="mt-5 max-w-xl text-lg leading-8 text-white/62">
-            Turn a URL and a little context into structured work your team can understand, share, and act on.
-          </p>
-
-          <ul className="mt-8 grid max-w-xl gap-3 sm:grid-cols-2">
-            {workspaceBenefits.map((benefit) => (
-              <li key={benefit} className="flex items-start gap-3 rounded-xl border border-white/[0.08] bg-white/[0.045] px-4 py-3 text-sm leading-6 text-white/72 backdrop-blur-sm">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#6658e8]/25 text-[#b9b4ff]">
-                  <CheckIcon className="h-3.5 w-3.5" />
-                </span>
-                {benefit}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="relative flex items-center gap-3 text-white/35">
-          <span className="h-px w-10 bg-white/20" />
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em]">
-            Clear decisions, not chat transcripts
-          </p>
-        </div>
-      </section>
-
-      <section className="relative flex items-center justify-center overflow-hidden px-5 py-10 sm:px-10 lg:px-12">
-        <div className="absolute right-[-120px] top-[-140px] h-80 w-80 rounded-full bg-[#5a4df4]/8 blur-3xl" />
-        <div className="absolute bottom-[-150px] left-[-100px] h-72 w-72 rounded-full bg-[#ff5738]/8 blur-3xl" />
-
-        <div className="relative w-full max-w-[480px]">
-          <div className="mb-10 lg:hidden">
-            <StellarLogo href="/login" />
-          </div>
-          <div className="rounded-[26px] border border-[#dfded8] bg-white p-6 shadow-[0_24px_80px_rgba(26,26,36,0.09)] sm:p-9">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#f0eeff] text-[#5549dd]">
-              <SparkIcon className="h-5 w-5" />
-            </div>
-            <p className="mt-6 font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-[#5549dd]">
-              Stellar workspace
-            </p>
-            <h2 className="mt-3 text-4xl font-semibold tracking-[-0.045em] text-[#14151d]">
-              Welcome back
-            </h2>
-            <p className="mt-3 leading-7 text-[#6b6a73]">
-              Sign in to access your agents, saved audits, and reports.
-            </p>
-            <LoginForm />
-            <div className="mt-6 flex items-center justify-center gap-2 border-t border-[#eceae6] pt-5 text-xs text-[#85848b]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#45a47a]" />
-              Your audit workspace is ready
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
-  );
+  return <main className="grid min-h-screen bg-[#f7f9fa] lg:grid-cols-[1.05fr_.95fr]">
+    <section className="login-grid relative hidden min-h-screen overflow-hidden bg-[#09110b] px-10 py-10 text-[#f2f5f1] lg:flex lg:flex-col lg:justify-between xl:px-16 xl:py-12">
+      <header className="relative flex items-center justify-between"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#eef5ef] text-[#0b5b37]"><SparkIcon className="h-5 w-5"/></span><span className="text-base font-semibold uppercase tracking-[.08em]">Stellar Agents</span></div><span className="flex items-center gap-2 text-xs text-[#9aae9e]"><i className="h-2 w-2 rounded-full bg-[#40bd73]"/>Live intelligence</span></header>
+      <div className="relative max-w-[700px] py-10"><p className="text-[11px] font-semibold uppercase tracking-[.22em] text-[#32a968]">Search intelligence workspace</p><h1 className="mt-6 text-4xl font-semibold leading-[1.08] tracking-[-.035em] xl:text-[60px]">Make every page<br/>easier to find,<br/>understand, and cite.</h1><p className="mt-6 max-w-2xl text-base leading-7 text-[#93a297]">Coordinate specialist SEO, AEO, content and website agents from one precise workspace. Turn audits into clear, prioritized action.</p>
+        <div className="mt-10 max-w-[820px] border border-[#233027] bg-[#0e1711]/90"><div className="flex items-center justify-between border-b border-[#233027] px-5 py-4"><div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#27a55d] text-[#06110a]"><SearchIcon className="h-4 w-4"/></span><div><p className="text-sm font-semibold">Website diagnosis</p><p className="text-[11px] text-[#829187]">One URL · selected specialists</p></div></div><span className="text-[11px] font-semibold uppercase tracking-[.15em] text-[#37ba70]">Ready</span></div><div className="grid sm:grid-cols-3"><div className="border-b border-[#233027] p-5 sm:border-b-0 sm:border-r"><p className="text-[11px] uppercase tracking-[.12em] text-[#829187]">Active agents</p><p className="mt-4 text-3xl font-semibold">10</p><p className="mt-3 text-xs text-[#36b86d]">Evidence-backed checks</p></div><div className="border-b border-[#233027] p-5 sm:border-b-0 sm:border-r"><p className="text-[11px] uppercase tracking-[.12em] text-[#829187]">Output</p><p className="mt-4 text-3xl font-semibold">1</p><p className="mt-3 text-xs text-[#829187]">Management report</p></div><div className="p-5"><p className="text-[11px] uppercase tracking-[.12em] text-[#829187]">Coverage</p><div className="mt-6 flex h-12 items-end gap-2">{[42,60,50,76,66,83,74,94,84,100].map((height,index)=><i key={index} className="w-full bg-[#378c57]" style={{height:`${height}%`}}/>)}</div><p className="mt-3 text-[11px] text-[#829187]">SEO · AEO · Content</p></div></div></div>
+      </div>
+      <footer className="relative text-xs text-[#607065]">Stellar Agents · Evidence before recommendations</footer>
+    </section>
+    <section className="flex min-h-screen items-center justify-center px-6 py-10 sm:px-10"><div className="w-full max-w-[440px]"><p className="text-[11px] font-semibold uppercase tracking-[.22em] text-[#007846]">Agent command center</p><h2 className="mt-5 text-4xl font-semibold tracking-[-.045em] text-[#171b1d]">Sign in</h2><p className="mt-3 max-w-md text-base leading-7 text-[#6d7579]">Enter the demo workspace to run all specialist agents and review complete reports.</p><div className="my-7 flex items-center gap-3 border-y border-[#dfe3e2] py-4 text-[13px] leading-5 text-[#6d7579]"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f0f3f2] text-[#1a2220]"><CheckIcon className="h-4 w-4"/></span>No setup required. Your saved sessions remain available in the workspace.</div><LoginForm/><div className="mt-6 border-l-2 border-[#07814d] bg-[#f2f4f3] px-4 py-3 text-[13px]"><div className="flex justify-between gap-5"><span className="text-[#737b7f]">Demo email</span><code>demo@stellar.ai</code></div><div className="mt-2 flex justify-between gap-5"><span className="text-[#737b7f]">Password</span><code>stellar123</code></div></div><p className="mt-8 text-center text-xs text-[#8b9295]">A guided product demonstration · No account creation required</p></div></section>
+  </main>;
 }

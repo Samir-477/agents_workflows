@@ -1,22 +1,12 @@
+import Link from "next/link";
 import { AgentDirectory } from "@/components/agent-directory";
 import { agents } from "@/data/agents";
 
 export default function AgentsPage() {
-  return (
-    <main>
-      <section className="border-b border-[#e8e6e1] bg-[radial-gradient(circle_at_75%_20%,rgba(90,77,244,0.10),transparent_34%),radial-gradient(circle_at_22%_24%,rgba(255,87,56,0.08),transparent_30%)]">
-        <div className="mx-auto max-w-[1180px] px-5 pb-12 pt-14 sm:px-8 sm:pb-16 sm:pt-20">
-          <div className="inline-flex items-center rounded-full border border-[#dbd9d4] bg-white/70 px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-[#62616a]">
-            <span className="mr-2 h-2 w-2 rounded-sm bg-[#ff5738] shadow-[6px_0_0_#5a4df4]" />
-            Stellar agents · {agents.length} specialists
-          </div>
-          <h1 className="mt-8 max-w-4xl text-5xl font-semibold leading-[1.02] tracking-[-0.055em] sm:text-7xl">
-            AI agents for <span className="text-[#da421f]">websites</span>,{" "}<span className="text-[#5a4df4]">SEO and useful work</span>
-          </h1>
-          <p className="mt-7 max-w-2xl text-lg leading-8 text-[#62626c]">Each Stellar agent does one job end to end. Give it the right input and receive structured output you can understand, share, and act on.</p>
-        </div>
-      </section>
-      <div className="mx-auto max-w-[1180px] px-5 pb-24 sm:px-8"><AgentDirectory /></div>
-    </main>
-  );
+  const active=agents.filter(agent=>agent.status==="active").length;
+  return <main className="bg-[#f8fafb]">
+    <section className="bg-[radial-gradient(ellipse_at_55%_0%,rgba(205,230,218,.55),transparent_48%)]"><div className="mx-auto max-w-[1240px] px-5 pb-14 pt-16 sm:px-7 sm:pb-16 sm:pt-20"><p className="text-[11px] font-semibold uppercase tracking-[.23em] text-[#6f7b7e]">Search → Answer → AI</p><h1 className="mt-5 max-w-[820px] text-4xl font-semibold leading-[1.08] tracking-[-.05em] text-[#101617] sm:text-5xl">Three engines. Twenty-six agents. One page at a time.</h1><p className="mt-5 max-w-[760px] text-base leading-7 text-[#697378]">The SEO engine helps the page get found. The AEO engine shapes clear, extractable answers. The GEO engine measures whether AI systems can understand and cite it. The orchestrator keeps every runnable specialist in one session.</p><div className="mt-8 flex flex-wrap items-center gap-8"><Link href="/diagnosis" className="rounded-full bg-[#007846] px-7 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#00683d]">Run the suite on a URL</Link><Link href="/agents/history" className="text-sm font-medium text-[#202628] hover:text-[#007846]">Open past sessions</Link></div><div className="mt-10 grid max-w-[860px] overflow-hidden rounded-[20px] border border-[#dce1df] bg-white sm:grid-cols-4"><div className="border-b p-5 sm:border-b-0 sm:border-r"><p className="text-[10px] uppercase tracking-[.16em] text-[#7c8589]">Agents</p><p className="mt-2 text-base font-semibold">{agents.length}</p></div><div className="border-b p-5 sm:border-b-0 sm:border-r"><p className="text-[10px] uppercase tracking-[.16em] text-[#7c8589]">Engines</p><p className="mt-2 text-base font-semibold">SEO · AEO · GEO</p></div><div className="border-b p-5 sm:border-b-0 sm:border-r"><p className="text-[10px] uppercase tracking-[.16em] text-[#7c8589]">Runnable now</p><p className="mt-2 text-base font-semibold">{active} workflows</p></div><div className="p-5"><p className="text-[10px] uppercase tracking-[.16em] text-[#7c8589]">Orchestrator</p><p className="mt-2 text-base font-semibold">1 session</p></div></div></div></section>
+    <AgentDirectory/>
+    <footer className="border-t border-[#e2e6e4] bg-[#f8fafb]"><div className="mx-auto flex max-w-[1240px] flex-wrap justify-between gap-4 px-5 py-8 text-xs text-[#7b8387] sm:px-7"><p>Stellar Agents — SEO, AEO and GEO analysis for pages that need to be found and cited.</p><p>Evidence-backed workflows · Persisted reports</p></div></footer>
+  </main>;
 }

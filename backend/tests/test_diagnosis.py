@@ -26,6 +26,39 @@ def setup_run():
     return repo, run
 
 
+def test_selected_agents_create_a_bounded_task_plan_with_required_dependencies():
+    request = DiagnosisInput(page_url=URL, selected_agents=["content_optimizer"])
+    assert request.selected_agents == ["serp_competitor", "keyword_cluster", "content_brief", "content_optimizer"]
+    repo = MemoryDiagnosisRepository()
+    run = repo.create(request)
+    assert list(run.tasks) == ["capture", "serp_competitor", "keyword_cluster", "content_brief", "content_optimizer", "report"]
+
+
+def test_individual_run_executes_only_the_requested_specialist():
+    request = DiagnosisInput(page_url=URL, run_mode="individual", selected_agents=["content_optimizer"])
+    assert request.selected_agents == ["content_optimizer"]
+    run = MemoryDiagnosisRepository().create(request)
+    assert list(run.tasks) == ["capture", "content_optimizer"]
+
+
+def test_individual_run_rejects_multiple_specialists():
+    with pytest.raises(ValueError, match="exactly one agent"):
+        DiagnosisInput(page_url=URL, run_mode="individual", selected_agents=["seo_audit", "metadata"])
+
+
+def test_management_report_contains_only_selected_agent_cases():
+    repo = MemoryDiagnosisRepository()
+    run = repo.create(DiagnosisInput(page_url=URL, run_mode="individual", selected_agents=["metadata"]))
+    run.tasks["capture"].status = "complete"
+    run.tasks["capture"].result = capture_data()
+    run.tasks["metadata"].status = "complete"
+    report = assemble_report(run)
+    assert [case["agent"] for case in report["cases"]] == ["metadata"]
+    assert [item["engine"] for item in report["session_intelligence"]["engine_scores"]] == ["SEO"]
+    assert report["session_intelligence"]["missing_engines"] == ["AEO", "GEO"]
+    assert {item["agent"] for item in report["session_intelligence"]["priorities"]} == {"metadata"}
+
+
 def capture_data():
     page = PageRecord(audit_id="test", requested_url=URL, final_url=URL, status_code=200,
                       title="Example Resort - TEST FIXTURE", main_text="A resort page for test verification. " * 50,
@@ -212,8 +245,27 @@ def report_fixture():
 
 def test_report_deduplicates_schema_and_excludes_unrelated_resort():
     report = report_fixture()
-    assert report["version"] == 5
+    assert report["version"] == 7
+    assert report["session_score"]["agent_count"] == 10
     schema_findings = [item for item in report["findings"] if item["title"] == "Malformed structured information"]
+    intelligence = report["session_intelligence"]
+    assert [item["engine"] for item in intelligence["engine_scores"]] == ["SEO", "AEO", "GEO"]
+    assert intelligence["priorities"][0]["agent"] == "seo_audit"
+    assert intelligence["priorities"][0]["finding_id"] == schema_findings[0]["id"]
+    assert intelligence["priorities"][0]["done_when"]
+    assert set(intelligence["priorities"][0]["score_factors"]) == {"severity", "impact", "effort", "engine_weakness"}
+    assert set(report["agent_reports"]) == set(AGENTS)
+    seo_report = report["agent_reports"]["seo_audit"]
+    assert 0 <= seo_report["score"] <= 100
+    assert len(seo_report["score_breakdown"]) == 4
+    assert len(seo_report["measurements"]) == 4
+    assert seo_report["finding_ids"] == [schema_findings[0]["id"]]
+    assert seo_report["benchmarks"][0]["evidence_id"] in report["evidence"]
+    assert seo_report["action_plan"][0]["done_when"]
+    assert seo_report["fixes"][0]["replacement"]
+    assert seo_report["success_metrics"]
+    assert seo_report["trace"]
+    assert seo_report["method"]
     assert len(schema_findings) == 1
     assert schema_findings[0]["supporting_agents"] == ["schema_markup"]
     assert "Unrelated property fault" not in str(report)
@@ -323,14 +375,14 @@ def test_report_keeps_weak_optimizer_topics_as_observations():
     assert any("Idea to investigate" in item for item in optimizer["observations"])
 
 
-def test_pdf_contains_all_ten_sections_and_evidence():
+def test_pdf_contains_agent_coverage_and_evidence():
     from pypdf import PdfReader
     report = report_fixture()
     pdf = build_pdf(report)
     reader = PdfReader(BytesIO(pdf))
     text = "\n".join(p.extract_text() for p in reader.pages)
     assert 4 <= len(reader.pages) <= 10
-    assert "Ten-agent coverage" in text
+    assert "Agent coverage" in text
     assert "Content Optimizer" in text
     assert "invalid control character" in text
     assert "REVIEW DRAFT" not in text
@@ -367,12 +419,20 @@ def test_api_history_and_download_use_same_saved_report():
     with TestClient(app) as client:
         assert client.get("/api/diagnoses").status_code == 401
         client.cookies.set("stellar_demo_session", "stellar-admin")
-        assert client.get("/api/diagnoses").json()[0]["id"] == run.id
+        history_response = client.get("/api/diagnoses").json()
+        history = history_response["items"][0]
+        assert history["id"] == run.id
+        assert history["selected_agents"] == list(AGENTS)
+        assert history["finding_count"] == len(report["findings"])
+        assert history_response["total"] == 1
+        assert history_response["total_pages"] == 1
         response = client.get(f"/api/diagnoses/{run.id}")
         assert response.json()["report"] == report
         assert "token" not in response.json()["tasks"]["capture"]
         assert client.get(f"/api/diagnoses/{run.id}/report.pdf").headers["content-type"] == "application/pdf"
         assert client.get("/api/diagnoses/missing").status_code == 404
+        assert client.delete(f"/api/diagnoses/{run.id}").status_code == 204
+        assert client.get(f"/api/diagnoses/{run.id}").status_code == 404
 
 
 def test_api_refreshes_an_existing_report_from_saved_agent_results():
@@ -390,7 +450,7 @@ def test_api_refreshes_an_existing_report_from_saved_agent_results():
         client.cookies.set("stellar_demo_session", "stellar-admin")
         response = client.post(f"/api/diagnoses/{run.id}/refresh-report")
         assert response.status_code == 200
-        assert response.json()["report"]["version"] == 5
+        assert response.json()["report"]["version"] == 7
 
 
 def test_api_starts_combined_diagnosis_from_url_only():
@@ -417,8 +477,21 @@ def test_api_hides_a_diagnosis_owned_by_another_subject(monkeypatch):
     with TestClient(app) as client:
         client.cookies.set("stellar_demo_session", "signed-for-test")
         assert client.get(f"/api/diagnoses/{run.id}").status_code == 404
-        assert client.get("/api/diagnoses").json() == []
+        assert client.get("/api/diagnoses").json()["items"] == []
         assert client.get(f"/api/diagnoses/{run.id}/report.pdf").status_code == 404
+
+
+def test_demo_admin_can_reopen_legacy_saved_diagnoses(monkeypatch):
+    repo, run = setup_run()
+    repo.mutate(run.id, lambda current: setattr(current, "owner_subject", "local-demo-admin"))
+    from diagnosis import api as diagnosis_api
+    monkeypatch.setattr(diagnosis_api, "session_subject", lambda value: "admin" if value else None)
+    app = FastAPI()
+    app.include_router(create_router(repo, None))
+    with TestClient(app) as client:
+        client.cookies.set("stellar_demo_session", "signed-for-test")
+        assert client.get("/api/diagnoses").json()["items"][0]["id"] == run.id
+        assert client.get(f"/api/diagnoses/{run.id}").status_code == 200
 
 
 @pytest.mark.asyncio

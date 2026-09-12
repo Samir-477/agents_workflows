@@ -40,10 +40,10 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-7 space-y-5" noValidate>
+    <form onSubmit={handleSubmit} className="space-y-5" noValidate>
       <div>
-        <label htmlFor="email" className="text-sm font-semibold text-[#24252d]">
-          Email address
+        <label htmlFor="email" className="text-xs font-semibold uppercase tracking-[.12em] text-[#626b70]">
+          Username or email
         </label>
         <input
           id="email"
@@ -51,13 +51,13 @@ export function LoginForm() {
           type="email"
           autoComplete="username"
           required
-          placeholder="you@company.com"
-          className="mt-2 h-13 w-full rounded-xl border border-[#d9d8d4] bg-[#fcfbf9] px-4 text-[#171820] outline-none transition placeholder:text-[#aaa9af] hover:border-[#c7c5bf] focus:border-[#5a4df4] focus:bg-white focus:ring-4 focus:ring-[#5a4df4]/10"
+          defaultValue="demo@stellar.ai"
+          className="mt-2 h-12 w-full rounded-xl border border-[#d9dedd] bg-white px-4 text-sm text-[#171b1d] shadow-sm outline-none transition hover:border-[#bcc6c2] focus:border-[#07814d] focus:ring-4 focus:ring-[#07814d]/10"
         />
       </div>
 
       <div>
-        <label htmlFor="password" className="text-sm font-semibold text-[#24252d]">
+        <label htmlFor="password" className="text-xs font-semibold uppercase tracking-[.12em] text-[#626b70]">
           Password
         </label>
         <div className="relative mt-2">
@@ -66,9 +66,9 @@ export function LoginForm() {
             name="password"
             type={showPassword ? "text" : "password"}
             autoComplete="current-password"
-            required
-            placeholder="Enter your password"
-            className="h-13 w-full rounded-xl border border-[#d9d8d4] bg-[#fcfbf9] px-4 pr-12 text-[#171820] outline-none transition placeholder:text-[#aaa9af] hover:border-[#c7c5bf] focus:border-[#5a4df4] focus:bg-white focus:ring-4 focus:ring-[#5a4df4]/10"
+          required
+            defaultValue="stellar123"
+            className="h-12 w-full rounded-xl border border-[#d9dedd] bg-white px-4 pr-11 text-sm text-[#171b1d] shadow-sm outline-none transition hover:border-[#bcc6c2] focus:border-[#07814d] focus:ring-4 focus:ring-[#07814d]/10"
           />
           <button
             type="button"
@@ -90,9 +90,9 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-[#ff5738] px-5 font-semibold text-white shadow-[0_10px_26px_rgba(255,87,56,0.2)] transition hover:-translate-y-0.5 hover:bg-[#e9482b] hover:shadow-[0_14px_30px_rgba(255,87,56,0.24)] disabled:cursor-wait disabled:opacity-70"
+        className="flex h-12 w-full items-center justify-center gap-3 rounded-xl bg-[#007846] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#00663c] disabled:cursor-wait disabled:opacity-70"
       >
-        {isSubmitting ? "Signing in..." : "Continue to workspace"}
+        {isSubmitting ? "Signing in..." : "Sign in to dashboard"}
         {!isSubmitting ? <ArrowIcon className="h-5 w-5" /> : null}
       </button>
     </form>

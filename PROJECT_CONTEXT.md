@@ -255,16 +255,19 @@ Dual7's internal architecture.
 ### Resort Website Diagnosis (2026-09-09)
 
 Website Diagnosis is a top-level product workflow at `/diagnosis`; it is not an
-eleventh agent. One resort URL starts a durable case. The resort identity used
-for search research is derived from the captured H1 or title, with the URL slug
-as a deterministic fallback. A single bounded capture is saved and reused by all ten specialist agents.
+eleventh agent. One resort URL starts a durable case. From New run, the user can
+run one, several, or all ten active specialists. Required upstream research agents
+are added automatically when a dependent content agent is selected there. The resort
+identity used for search research is derived from the captured H1 or title, with
+the URL slug as a deterministic fallback. A single bounded capture is saved and
+reused by every selected specialist.
 SERP evidence, keyword groups and the content brief flow through explicit
 dependencies; unrelated resort-page findings are excluded from the final case.
 
 Each task has its own persisted status, child-run identifier, recovery lease and
 retry boundary. At most two non-model tasks run concurrently and model tasks are
 serialized within a diagnosis. The browser advances one bounded task per API
-request, so a Vercel request does not hold the complete ten-agent pipeline open.
+request, so a Vercel request does not hold the complete selected pipeline open.
 An optional `python -m diagnosis.worker` process can advance the same saved queue.
 Successful work is retained when a failed task is retried.
 
@@ -296,9 +299,9 @@ display the affected image. SERP proof is attributed to the captured Serper
 Google sample rather than to the audited page. Exact-phrase content gaps,
 fallback-brief ideas, sentence-length heuristics and similar weak signals remain
 agent observations instead of management findings. Completed version-1 reports
-can be rebuilt from saved task results without rerunning the ten agents.
+can be rebuilt from saved task results without rerunning their specialists.
 
-Management presentation version 3 gives every agent the same case-file format:
+Management presentation version 3 gives every participating agent the same case-file format:
 issue identified, evidence explained with an example, management relevance,
 other findings, bulleted actions, responsible owner, timeframe, limitation and
 technical details. After deterministic findings and evidence packs are built,
@@ -309,7 +312,7 @@ source pack; evidence examples must be verbatim or are discarded; unsupported
 ranking, traffic, booking and revenue claims reject that case only. Supporting
 and no-finding cases use the same deterministic format. Valid model cases are
 cached with the report, provider failure never blocks the report, and wording
-can be regenerated without rerunning the ten diagnostic agents. Live testing
+can be regenerated without rerunning the diagnostic agents. Live testing
 showed the configured DeepSeek endpoint exceeded the editorial latency budget,
 while the selected Groq/Qwen model completed bounded case edits; this report
 stage therefore uses the diagnosis's selected provider rather than silently
@@ -334,13 +337,13 @@ from customer-image accessibility totals while recording how many were excluded.
 The report assigns one primary owner to each validated issue and treats other
 agents as supporting checks, avoiding duplicate cases and duplicate actions. The
 PDF contains detailed case files only for validated primary findings plus a compact
-ten-agent accountability table. It uses embedded Unicode fonts, human-readable
+agent accountability table. It uses embedded Unicode fonts, human-readable
 source labels and quality states so failed or rejected agent output cannot appear
 as verified website evidence.
 
 The management UI now separates confirmed issues, review items, opportunities
 and rejected outputs. It renders detailed case files only for agents that own a
-validated finding, then records all ten agents in a compact accountability table.
+validated finding, then records every participating agent in a compact accountability table.
 Issue-specific proof includes structured-data pass/fail comparisons, metadata
 length visualization, representative image evidence and explicit completion
 checks. External evidence images load only after a user action so opening a
@@ -348,7 +351,7 @@ report does not automatically contact the audited website.
 
 Management presentation version 5 uses the website as the primary review surface.
 It presents a compact executive summary and prioritized action list, followed by
-expandable finding-level cases and one ten-agent contribution table. Evidence uses
+expandable finding-level cases and one agent contribution table. Evidence uses
 finding-specific views for JSON parsing, schema identity conflicts, metadata,
 image alternatives and SERP samples. Suggested fixes are derived from captured
 facts and labelled for review. Calendar deadlines are not inferred; workflow
@@ -363,11 +366,101 @@ rewriting old conclusions. Resort identity requires corroboration between the
 URL and schema, title or H1. A conflicting LodgingBusiness name is rejected as
 an identity source and becomes its own direct structured-data finding.
 
-Production authentication uses an HMAC-signed, expiring session shared by the
-Next.js and FastAPI layers. Production fails closed when the session secret or
-admin credentials are missing. Diagnosis ownership is stored server-side and
-checked for history, reads, mutations, evidence and PDF downloads. The old fixed
+The current client-review build is an explicitly labelled demo workspace. It
+uses the visible demonstration credentials `demo@stellar.ai` and `stellar123`
+and creates an HMAC-signed, expiring session shared by the Next.js and FastAPI
+layers. `STELLAR_SESSION_SECRET` can override the signing secret. Diagnosis
+ownership is stored server-side and checked for history,
+reads, mutations, evidence and PDF downloads. The demo administrator can reopen
+legacy diagnoses created under the earlier local-demo identity. The old fixed
 cookie is accepted only by the local development/test compatibility path.
+
+### Client-review interface (2026-09-12)
+
+The application shell uses a restrained Stellar Agents command-centre design:
+a split sign-in page, a persistent Agents/New run/Sessions navigation bar, a
+three-engine agent directory, and a dedicated New run screen. The directory
+groups 26 catalog capabilities into SEO, AEO and GEO, with search and engine
+filters. Ten entries map to implemented, runnable diagnosis workflows; the
+remaining sixteen are explicitly labelled Planned and must not imply working
+pipelines or measured results. Card copy describes capability and expected
+output rather than fabricated customer findings. New run accepts a URL, groups
+the ten active diagnosis specialists under their engine, and submits the
+selected set into the durable pipeline. Saved sessions remain a separate
+navigation destination.
+
+Sessions now represent complete URL diagnosis runs rather than unrelated
+standalone child records. Each card shows the URL, participating specialists,
+status, saved time and verified-finding count. Deleting a settled session also
+removes its persisted child runs. Every active agent detail page uses one shared
+information architecture: Method, Coverage, Weighting, Output, Questions and
+Pair with. A sticky URL form starts an individual run containing the shared page
+capture and exactly that specialist. It does not add upstream specialists or the
+management-report orchestration task. A compact deterministic report presents the
+single agent's saved evidence after it finishes. Combined dependency expansion
+remains exclusive to New run. Individual and combined reports may both use the
+bounded editorial model pass after deterministic facts are assembled.
+Individual result screens use one evidence-aware structure across all ten agents:
+Executive summary, Measurements, Findings, Evidence, Benchmark, Action plan,
+Fix it, Do it, Measure it, Trace and Method. The sections adapt to saved output;
+missing comparison data or code examples are disclosed instead of fabricated.
+Local browser requests use the same-origin `/api` path and Next.js proxies that
+path to FastAPI during development. This keeps the signed session cookie attached
+regardless of whether the browser opened `localhost` or `127.0.0.1`. Vercel keeps
+the same public path and routes it through `api/index.py`. The approved desktop
+density is implemented through smaller component typography, spacing, controls
+and container dimensions at normal browser zoom; the interface does not use CSS
+zoom or transform scaling.
+
+### Agent report contract (2026-09-12)
+
+Saved report version 6 adds one normalized presentation record for every
+participating agent. Each record contains an evidence-based score, named score
+areas, measurements, retained findings, evidence references, supported
+benchmarks, phased actions, reviewable implementation examples, execution
+steps, completion metrics, trace records and method notes. The same contract is
+used for an individual run and for each specialist inside a multi-agent session.
+
+Saved report version 7 adds a session intelligence layer above those agent
+reports. Every completed session, including an individual-agent run, opens on
+two linked views: **Intelligence layer** and **Agent results**. The intelligence
+view rolls up only the engines that actually participated in the run, names
+unassessed engines instead of inventing scores, and ranks the saved findings by
+severity, impact, effort, and engine weakness. Each ranked action keeps its
+source agent and finding identifier so the user can open the supporting report
+directly. The view also derives quick wins, delay risks, and a sequenced
+Now/Next/Later delivery plan from the same saved evidence. The agent-results
+view groups all participating reports by engine and links back to the session
+intelligence without starting a second run.
+
+The session intelligence calculation is deterministic and persisted with the
+report. Its scoring factors are exposed in the interface so priority order can
+be explained and tested. Engine scores currently use an equal-weight mean
+across the participating agents; future calibrated engine weights may replace
+this only when there is measured evidence for them.
+
+Session routes fetch the saved diagnosis during the server render and pass it
+into the interactive report as initial state. A browser refresh therefore paints
+the saved report directly instead of showing a full-page restoration screen;
+client polling then reconciles fresher task state in the background. The
+intelligence view leads with an executive decision brief, shows assessed and
+unassessed engine coverage, keeps a compact evidence-linked action queue, joins
+the top action to its owner and verification rule, hides empty delivery windows,
+and ends with an explicit prioritization and source-evidence disclosure.
+
+Scores are calculated by code. Native agent scores are retained when an agent
+already exposes a documented score; other agents use the project's explicit
+finding-penalty rubric across named assessment areas. The score is a prioritizing
+aid for the captured scope, not a traffic, revenue or ranking forecast. The
+session score is the equal-weight average of usable participating-agent scores
+and shows that basis in the interface. Rejected outputs are excluded.
+
+Benchmarks remain evidence-bound. The interface compares a captured observation
+with a stored decision rule or a real captured comparison dataset. It does not
+invent category-leader, rival, median, impression or target values. The optional
+model call may simplify executive and management wording inside the validated
+report contract, but cannot create or change scores, measurements, findings,
+evidence, benchmarks or completion rules.
 
 Decision recorded on 2026-09-05: the seventh persisted workflow is an
 evidence-first AI Visibility Audit Agent. This is our implementation decision,
@@ -622,8 +715,19 @@ Deployment requirement recorded on 2026-08-29: every new product feature must be
   backend URL environment variable or CORS configuration.
 - All persistence uses Supabase Postgres through its transaction pooler; there is no embedded local database fallback.
 - The Vercel path replaces the permanent polling worker with a bounded, idempotently claimed `/audits/{id}/process` invocation started by the run page. The worker remains a local-development option.
+- Diagnosis advance requests execute their bounded specialist step outside the FastAPI event loop. This keeps status reads, cancellation and reconnects responsive while provider-backed agents are working. The run page treats saved task state as authoritative and continues polling through transient proxy disconnects instead of presenting an advance-request timeout as a failed diagnosis.
+- PostgreSQL reads retry once on a fresh connection after a transient operational or SSL disconnect. Writes are never replayed automatically because their commit state may be ambiguous.
 - The current 20-page MVP is intentionally bounded to fit Vercel's function duration. Durable multi-invocation crawling with Vercel Queues or Workflow is deferred until larger crawls are required.
 - Generated PDF responses should remain on-demand downloads; future stored artifacts should use durable object storage rather than a local reports directory.
+
+Performance decision recorded on 2026-09-12: saved diagnosis screens use server-loaded presentation payloads and compact history records.
+
+- Completed session and history pages render saved content in the first server response, avoiding a client-only restoration screen and a duplicate hydration fetch.
+- The diagnosis read endpoint removes raw specialist task evidence in PostgreSQL before transfer; the normalized report remains available to the UI and raw capture evidence stays behind the dedicated evidence endpoint.
+- Session history selects only list-card fields and applies ownership filtering in SQL instead of loading and validating every full report document.
+- Session history uses database-backed pagination with ten rows per page; the UI presents a compact operational table and never loads the full session archive into the browser.
+- All PostgreSQL repositories share a bounded process-level connection pool. Supabase's transaction pooler remains the external database boundary; the application pool avoids repeating TLS and authentication setup for every request.
+- Development can select its local FastAPI origin with `LOCAL_API_ORIGIN`. Production continues to use same-origin API routes.
 
 The automated tests cover URL validation, extraction, rule evidence, scoring, the API queue, a robots-limited report, and complete LangGraph runs with fake crawlers. A live smoke test against `https://example.com` also completed through persistence and reporting.
 

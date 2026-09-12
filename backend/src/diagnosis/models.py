@@ -23,6 +23,11 @@ AGENTS = {
     "content_optimizer": "Resort Page Content Quality",
 }
 LABELS = dict(zip(AGENTS, ["SEO/AEO Audit", "AI Visibility", "Internal Linking", "SERP & Competitor", "Keyword Clustering", "Metadata", "Schema Markup", "Content Brief", "Local SEO", "Content Optimizer"]))
+AGENT_DEPENDENCIES = {
+    "keyword_cluster": {"serp_competitor"},
+    "content_brief": {"serp_competitor", "keyword_cluster"},
+    "content_optimizer": {"serp_competitor", "keyword_cluster", "content_brief"},
+}
 
 
 class DiagnosisInput(BaseModel):
@@ -34,6 +39,12 @@ class DiagnosisInput(BaseModel):
     country: str = Field(default="in", pattern=r"^[a-zA-Z]{2}$")
     language: str = Field(default="en", pattern=r"^[a-zA-Z]{2}$")
     model_provider: Literal["configured", "deepseek"] = "configured"
+    run_mode: Literal["diagnosis", "individual"] = "diagnosis"
+    selected_agents: list[Literal[
+        "seo_audit", "ai_visibility", "internal_linking", "serp_competitor",
+        "keyword_cluster", "metadata", "schema_markup", "content_brief",
+        "local_seo", "content_optimizer",
+    ]] = Field(default_factory=lambda: list(AGENTS))
 
     @model_validator(mode="before")
     @classmethod
@@ -44,6 +55,24 @@ class DiagnosisInput(BaseModel):
             value = dict(value)
             value.pop("target_keyword", None)
         return value
+
+    @model_validator(mode="after")
+    def include_required_agent_dependencies(self):
+        selected = set(self.selected_agents)
+        if not selected:
+            raise ValueError("Select at least one agent")
+        if self.run_mode == "individual":
+            if len(selected) != 1:
+                raise ValueError("An individual run must select exactly one agent")
+            self.selected_agents = [key for key in AGENTS if key in selected]
+            return self
+        while True:
+            expanded = selected | set().union(*(AGENT_DEPENDENCIES.get(key, set()) for key in selected))
+            if expanded == selected:
+                break
+            selected = expanded
+        self.selected_agents = [key for key in AGENTS if key in selected]
+        return self
 
 
 class Task(BaseModel):

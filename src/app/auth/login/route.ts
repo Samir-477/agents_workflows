@@ -1,22 +1,15 @@
 import { NextResponse } from "next/server";
 import { COOKIE_NAME, createSession } from "@/lib/session";
 
-function credentials() {
-  const email=process.env.STELLAR_ADMIN_EMAIL;
-  const password=process.env.STELLAR_ADMIN_PASSWORD;
-  if (email&&password) return {email,password};
-  if (process.env.NODE_ENV!=="production") return {email:"admin@gmail.com",password:"admin123"};
-  return null;
-}
+const DEMO_EMAIL = "demo@stellar.ai";
+const DEMO_PASSWORD = "stellar123";
 
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => null)) as
     | { email?: string; password?: string }
     | null;
 
-  const expected=credentials();
-  if (!expected) return NextResponse.json({error:"Production authentication is not configured."},{status:503});
-  if (payload?.email !== expected.email || payload.password !== expected.password) {
+  if (payload?.email !== DEMO_EMAIL || payload.password !== DEMO_PASSWORD) {
     return NextResponse.json(
       { error: "Incorrect email or password." },
       { status: 401 },

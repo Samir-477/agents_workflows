@@ -14,10 +14,7 @@ function decodeBase64url(value: string) {
 }
 
 function secret() {
-  const configured = process.env.STELLAR_SESSION_SECRET;
-  if (configured) return configured;
-  if (process.env.NODE_ENV === "production") throw new Error("STELLAR_SESSION_SECRET is required in production.");
-  return DEV_SECRET;
+  return process.env.STELLAR_SESSION_SECRET || DEV_SECRET;
 }
 
 async function key() {

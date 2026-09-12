@@ -1,8 +1,9 @@
+import asyncio
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from diagnosis.models import DiagnosisInput
-from diagnosis.engine import process_one, retry, rerun_all, cancel
+from diagnosis.engine import REPOSITORIES, process_one, retry, rerun_all, cancel
 from diagnosis.pdf import build_pdf
 from diagnosis.reporting import assemble_report
 from agent_runtime.session import session_subject
@@ -34,12 +35,12 @@ def create_router(repository, deps):
         tags=["Website Diagnosis"],
         dependencies=[Depends(require_access)],
     )
-    def get(id, subject):
+    def get(id, subject, *, display=False):
         try:
-            run = repository.get(id)
+            run = repository.get_for_display(id) if display else repository.get(id)
         except LookupError:
             raise HTTPException(404, "Diagnosis not found") from None
-        legacy_admin = run.owner_subject is None and subject in {"admin", "local-demo-admin"}
+        legacy_admin = subject in {"admin", "local-demo-admin"} and run.owner_subject in {None, "local-demo-admin"}
         if run.owner_subject != subject and not legacy_admin:
             raise HTTPException(404, "Diagnosis not found")
         return run
@@ -51,18 +52,61 @@ def create_router(repository, deps):
         return public(repository.get(created.id))
 
     @router.get("")
-    def history(subject: str = Depends(require_access)):
-        visible = [r for r in repository.list() if r.owner_subject == subject or (r.owner_subject is None and subject in {"admin", "local-demo-admin"})]
-        return [{"id": r.id, "url": str(r.request.page_url), "status": r.status, "created_at": r.created_at} for r in visible]
+    def history(
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=10, ge=5, le=50),
+        subject: str = Depends(require_access),
+    ):
+        result = repository.history(subject, page_size, (page - 1) * page_size)
+        total = result["total"]
+        return {
+            "items": result["items"],
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "total_pages": max(1, (total + page_size - 1) // page_size),
+        }
+
+    @router.delete("/{id}", status_code=204)
+    def delete_run(id: str, subject: str = Depends(require_access)):
+        current = get(id, subject)
+        if any(task.status == "running" for task in current.tasks.values()):
+            raise HTTPException(409, "Cancel this session before deleting it.")
+        delete_methods = {
+            "seo_audit": "delete_audit", "ai_visibility": "delete_audit",
+            "internal_linking": "delete_audit", "serp_competitor": "delete",
+            "keyword_cluster": "delete_generation", "metadata": "delete_generation",
+            "schema_markup": "delete_generation", "content_brief": "delete_generation",
+            "local_seo": "delete", "content_optimizer": "delete",
+        }
+        if deps is not None:
+            for key, task in current.tasks.items():
+                if key not in REPOSITORIES or not task.run_id:
+                    continue
+                child_repository = getattr(deps, REPOSITORIES[key])
+                try:
+                    getattr(child_repository, delete_methods[key])(task.run_id)
+                except LookupError:
+                    pass
+        repository.delete(id)
+        return Response(status_code=204)
 
     @router.get("/{id}")
     def read(id: str, subject: str = Depends(require_access)):
-        return public(get(id, subject))
+        return public(get(id, subject, display=True))
 
     @router.post("/{id}/advance")
     async def advance(id: str, subject: str = Depends(require_access)):
-        get(id, subject)
-        return public(await process_one(deps, repository, id))
+        # Several specialist implementations still contain synchronous provider
+        # and repository calls. Run the bounded workflow step in its own thread
+        # so a slow specialist cannot block status polling, cancellation, or
+        # other API requests on the FastAPI event loop.
+        def run_step():
+            get(id, subject)
+            return asyncio.run(process_one(deps, repository, id))
+
+        completed = await asyncio.to_thread(run_step)
+        return public(completed)
 
     @router.post("/{id}/retry")
     def retry_run(id: str, subject: str = Depends(require_access)):
@@ -75,7 +119,7 @@ def create_router(repository, deps):
     @router.post("/{id}/upgrade")
     def upgrade_run(id: str, subject: str = Depends(require_access)):
         current = get(id, subject)
-        if current.report and current.report.get("version", 0) >= 5:
+        if current.report and current.report.get("version", 0) >= 6:
             raise HTTPException(409, "This diagnosis already uses the current evidence contract.")
         try:
             return public(rerun_all(repository, id))
@@ -84,7 +128,7 @@ def create_router(repository, deps):
 
     @router.post("/{id}/rerun-all")
     def rerun_all_tasks(id: str, subject: str = Depends(require_access)):
-        """Start a fresh evidence capture and rerun all ten specialists."""
+        """Start a fresh evidence capture and rerun this diagnosis's selected specialists."""
         get(id, subject)
         try:
             return public(rerun_all(repository, id))
@@ -122,7 +166,8 @@ def create_router(repository, deps):
             report["management_editor"]["note"] = "The editorial model was unavailable; deterministic management wording is shown."
         def rebuild(run):
             run.report = report
-            run.tasks["report"].result = {"report_version": run.report["version"]}
+            if "report" in run.tasks:
+                run.tasks["report"].result = {"report_version": run.report["version"]}
             return run
         repository.mutate(id, rebuild)
         return public(get(id, subject))

@@ -12,7 +12,7 @@ stellar-agents/
   api/index.py               small Vercel FastAPI entrypoint
   backend/
     src/agent_runtime/        shared app composition and agent registration
-    src/diagnosis/            durable ten-agent website diagnosis and PDF report
+    src/diagnosis/            durable selected-agent website diagnosis and PDF report
     src/meta_generator/       prompt parsing, generation, validation, and storage
     src/seo_audit/           crawler, rules, workflow, storage, and reports
     tests/                   backend tests
@@ -63,8 +63,10 @@ requests use `/api/agents/meta-title-description`. Both are served from the same
 FastAPI/Vercel deployment, so do not set `NEXT_PUBLIC_API_URL` in Vercel.
 
 Resort-wide management reviews are available at `/diagnosis` and use
-`/api/diagnoses`. The page advances short persisted tasks and can safely resume
-after interruption. For continuous processing outside the browser, run:
+`/api/diagnoses`. A run may include one, several, or all ten active specialists;
+required research dependencies are selected automatically. The page advances
+short persisted tasks and can safely resume after interruption. For continuous
+processing outside the browser, run:
 
 ```powershell
 Set-Location backend
@@ -74,6 +76,10 @@ python -m diagnosis.worker
 Model-powered agents use `AGENT_LLM_PROVIDER` and `AGENT_LLM_MODEL`, with the
 provider-specific `GROQ_API_KEY` or `OPENAI_API_KEY`. The older
 `SEO_AUDIT_LLM_*` variable names remain supported for compatibility.
+
+The client-review workspace uses the visible demonstration credentials
+`demo@stellar.ai` / `stellar123`. `STELLAR_SESSION_SECRET` can override the
+session-signing key.
 
 See [deployment notes](docs/DEPLOYMENT.md) and
 [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md).

@@ -25,6 +25,8 @@ next-env.d.ts
 tsconfig.tsbuildinfo
 
 # Package-manager and debug artifacts
+.backend-dev.*.log
+.frontend-dev.*.log
 .pnp
 .pnp.*
 .yarn/

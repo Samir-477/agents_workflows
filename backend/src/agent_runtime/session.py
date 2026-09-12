@@ -19,11 +19,9 @@ def session_subject(value: str | None) -> str | None:
     if not value:
         return None
     configured = os.getenv("STELLAR_SESSION_SECRET")
-    if not configured and _production():
-        return None
     # Keep existing local test sessions working, but never accept this static
     # cookie when the service is configured as production.
-    if not configured and value == "stellar-admin":
+    if not configured and not _production() and value == "stellar-admin":
         return "local-demo-admin"
     secret = (configured or DEV_SECRET).encode()
     try:

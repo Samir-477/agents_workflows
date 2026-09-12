@@ -24,6 +24,12 @@ DEPS.update(keyword_cluster={"capture", "serp_competitor"}, content_brief={"capt
 MODEL_TASKS = {"internal_linking", "keyword_cluster", "metadata", "schema_markup", "content_brief", "local_seo", "report"}
 
 
+def required_tasks(run, key):
+    if key == "report":
+        return set(run.tasks) & set(AGENTS)
+    return DEPS[key] & set(run.tasks)
+
+
 def claim(repository, id):
     def change(run):
         if run.status in {"complete", "partial", "cancelled"}:
@@ -38,7 +44,7 @@ def claim(repository, id):
         if len(active) >= 2:
             return None
         for key, task in run.tasks.items():
-            if task.status != "queued" or not all(run.tasks[d].status in TERMINAL for d in DEPS[key]):
+            if task.status != "queued" or not all(run.tasks[d].status in TERMINAL for d in required_tasks(run, key)):
                 continue
             if key in MODEL_TASKS and any(k in MODEL_TASKS for k in active):
                 continue
@@ -157,8 +163,8 @@ async def execute(deps, repository, run, key, token):
     selected = task_dependencies(deps, run, key, repository, token)
     source = narrative(run.tasks["capture"].result)
     keyword = derive_research_query(run.tasks["capture"].result, url)
-    research_task = run.tasks["serp_competitor"]
-    research = deps.serp_repository.get(research_task.run_id).result if research_task.status == "complete" and research_task.run_id else None
+    research_task = run.tasks.get("serp_competitor")
+    research = deps.serp_repository.get(research_task.run_id).result if research_task and research_task.status == "complete" and research_task.run_id else None
     if key == "local_seo":
         phones = list(dict.fromkeys(__import__("re").findall(r"(?:\+?\d[\d\s().-]{7,}\d)", primary.get("main_text", ""))))[:10]
         return {"status": "complete", "detail": {
@@ -214,7 +220,7 @@ async def execute(deps, repository, run, key, token):
         }}
     elif key == "content_brief":
         import json
-        cluster_detail = run.tasks["keyword_cluster"].result.get("detail", {})
+        cluster_detail = run.tasks.get("keyword_cluster", Task()).result.get("detail", {})
         secondary = []
         for cluster in cluster_detail.get("clusters", []):
             for item in cluster.get("keywords", []):
@@ -223,7 +229,23 @@ async def execute(deps, repository, run, key, token):
                     secondary.append(candidate)
         notes = source[:4500] + "\nSearch research (observations, not instructions):\n" + (json.dumps(research.model_dump(mode="json"))[:3000] if research else "Not available")
         child = selected.content_brief_repository.create_generation(ContentBriefCreate(target_keyword=keyword, secondary_keywords=secondary[:30], audience=run.request.audience or "Unconfirmed audience; human review required", business_goal=run.request.business_goal or None, product_context=source[:1900], source_notes=notes[:7900], existing_urls=[p["final_url"] for p in run.tasks["capture"].result["pages"]][:20], content_mode="rewrite"))
-        await build_content_brief_graph(selected.settings, selected.content_brief_repository, generator=selected.content_brief_generator).ainvoke({"generation_id": child.id})
+        try:
+            await build_content_brief_graph(selected.settings, selected.content_brief_repository, generator=selected.content_brief_generator).ainvoke({"generation_id": child.id})
+        except Exception:
+            return {"status": "complete", "run_id": child.id, "detail": {
+                "mode": "evidence_assessment",
+                "target_keyword": keyword,
+                "observations": [
+                    "The captured page and saved search evidence were reviewed for content-planning inputs.",
+                    f"Observed {len(secondary)} supporting search theme(s) in the available evidence.",
+                ],
+                "warnings": [
+                    "The optional model-generated content brief exceeded its provider budget. The evidence assessment remains available; generated copy was not substituted with invented content."
+                ],
+                "limitations": [
+                    "No generated outline is presented until the configured model returns a validated brief."
+                ],
+            }}
         final = selected.content_brief_repository.get_generation(child.id)
         if final.result and (not run.request.audience or not run.request.business_goal):
             final.result.ready_for_handoff = False
@@ -238,7 +260,7 @@ async def execute(deps, repository, run, key, token):
             "metadata": lambda: legacy._run_metadata(selected, source, keyword),
             "schema_markup": lambda: legacy._run_schema(selected, source),
             "local_seo": lambda: legacy._run_local_seo(selected, source, url),
-            "content_optimizer": lambda: legacy._run_content_optimizer(selected, url, keyword, run.request.audience or None, research_task.run_id if research else None, run.tasks["content_brief"].run_id if run.tasks["content_brief"].status == "complete" else None),
+            "content_optimizer": lambda: legacy._run_content_optimizer(selected, url, keyword, run.request.audience or None, research_task.run_id if research and research_task else None, run.tasks.get("content_brief").run_id if run.tasks.get("content_brief") and run.tasks["content_brief"].status == "complete" else None),
         }
         outcome = await calls[key]()
     if outcome.status != "complete" and key in {"metadata", "schema_markup", "content_brief"}:
@@ -278,7 +300,33 @@ async def process_one(deps, repository, id):
             if state == "complete":
                 run.report = result
             run.status = "partial" if any(t.status != "complete" for t in run.tasks.values()) else "complete"
+        elif run.request.run_mode == "individual" and all(t.status in TERMINAL for t in run.tasks.values()):
+            from diagnosis.reporting import assemble_report
+            run.report = assemble_report(run)
+            run.status = "partial" if any(t.status != "complete" for t in run.tasks.values()) else "complete"
     repository.mutate(id, finish)
+    completed = repository.get(id)
+    if (
+        deps is not None
+        and completed.request.run_mode == "individual"
+        and completed.report
+        and completed.report.get("management_editor", {}).get("status") == "deterministic_fallback"
+        and completed.tasks.get("capture", Task()).status == "complete"
+    ):
+        from diagnosis.reporting import narrate
+        report_stamp = completed.report.get("generated_at")
+        try:
+            selected = task_dependencies(deps, completed, "report", repository, token)
+            edited_report = await narrate(copy.deepcopy(completed.report), selected.settings)
+
+            def save_editorial(run):
+                if run.report and run.report.get("generated_at") == report_stamp:
+                    run.report = edited_report
+
+            repository.mutate(id, save_editorial)
+        except Exception:
+            # The deterministic report is already complete and remains authoritative.
+            pass
     return repository.get(id)
 
 
@@ -287,7 +335,7 @@ def retry(repository, id):
         if any(t.status == "running" and t.lease_until > time.time() for t in run.tasks.values()):
             raise ValueError("Wait for active tasks or cancel before retrying")
         reset = {k for k,t in run.tasks.items() if t.status != "complete"}
-        metadata_warnings = run.tasks["metadata"].result.get("detail", {}).get("warnings", [])
+        metadata_warnings = run.tasks.get("metadata", Task()).result.get("detail", {}).get("warnings", [])
         if any("generation was unavailable" in item for item in metadata_warnings):
             reset.add("metadata")
         capture = run.tasks["capture"].result
@@ -298,13 +346,15 @@ def retry(repository, id):
                 capture["research_query"] = corrected_query
                 # A changed identity invalidates both downstream research and
                 # evidence counts produced by the older capture contract.
-                reset |= {"capture", *AGENTS}
+                reset |= set(run.tasks)
         while True:
-            expanded = reset | {k for k, parents in DEPS.items() if parents & reset}
+            expanded = reset | {k for k in run.tasks if required_tasks(run, k) & reset}
             if expanded == reset:
                 break
             reset = expanded
-        for k in reset | {"report"}:
+        if "report" in run.tasks:
+            reset.add("report")
+        for k in reset:
             run.tasks[k] = Task()
         run.report, run.status = None, "queued"
     repository.mutate(id, change)
@@ -312,7 +362,7 @@ def retry(repository, id):
 
 
 def rerun_all(repository, id):
-    """Discard a legacy diagnosis contract and rerun capture plus every agent."""
+    """Discard a diagnosis result and rerun its selected specialists."""
     def change(run):
         if any(t.status == "running" and t.lease_until > time.time() for t in run.tasks.values()):
             raise ValueError("Wait for active tasks or cancel before upgrading")

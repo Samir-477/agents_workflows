@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SEO/AEO Audit Agent",
-  description: "Evidence-backed, prioritized website search audits.",
+  title: "Stellar Agents",
+  description: "Evidence-backed SEO, AEO and website diagnosis agents.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

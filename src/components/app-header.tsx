@@ -1,48 +1,28 @@
-import Link from "next/link";
+"use client";
 
-import { StellarLogo } from "@/components/stellar-logo";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const navItems = [
+  { href: "/agents", label: "Agents", match: (path: string) => path === "/agents" || (path.startsWith("/agents/") && !path.startsWith("/agents/history")) },
+  { href: "/diagnosis", label: "New run", match: (path: string) => path.startsWith("/diagnosis") },
+  { href: "/agents/history", label: "Sessions", match: (path: string) => path.startsWith("/agents/history") },
+];
 
 export function AppHeader() {
-  return (
-    <header className="border-b border-[#e8e7e4] bg-white">
-      <div className="mx-auto flex h-[76px] max-w-[1180px] items-center justify-between px-5 sm:px-8">
-        <div className="flex items-center gap-4">
-          <StellarLogo />
-          <span className="hidden rounded-full border border-[#deddd9] bg-[#faf9f7] px-3 py-1 font-mono text-[11px] tracking-[0.08em] text-[#6d6d75] sm:inline-flex">
-            <span className="mr-2 text-[#ff5738]">●</span> early access
-          </span>
-        </div>
-
-        <nav className="flex items-center gap-3" aria-label="Account navigation">
-          <Link href="/diagnosis" className="rounded-lg px-3 py-2 text-sm font-semibold text-[#5140ad] hover:bg-[#f2effa]">Website Diagnosis</Link>
-          <Link
-            href="/agents"
-            className="hidden rounded-lg px-3 py-2 text-sm font-medium text-[#5f5f68] hover:bg-[#f6f5f2] hover:text-[#12131a] sm:inline-flex"
-          >
-            Agents
-          </Link>
-          <Link
-            href="/agents/history"
-            className="hidden rounded-lg px-3 py-2 text-sm font-medium text-[#5f5f68] hover:bg-[#f6f5f2] hover:text-[#12131a] sm:inline-flex"
-          >
-            History
-          </Link>
-          <Link
-            href="/agents/settings"
-            className="hidden rounded-lg px-3 py-2 text-sm font-medium text-[#5f5f68] hover:bg-[#f6f5f2] hover:text-[#12131a] sm:inline-flex"
-          >
-            Settings
-          </Link>
-          <form action="/auth/logout" method="post">
-            <button
-              type="submit"
-              className="rounded-xl border border-[#deddd9] bg-white px-4 py-2.5 text-sm font-semibold text-[#20212a] transition hover:border-[#bdbcb8] hover:bg-[#faf9f7]"
-            >
-              Log out
-            </button>
-          </form>
+  const pathname = usePathname();
+  return <header className="sticky top-0 z-40 border-b border-[#e2e5e4] bg-[#fbfcfc]/95 backdrop-blur">
+    <div className="mx-auto flex h-[68px] max-w-[1240px] items-center justify-between px-5 sm:px-7">
+      <div className="flex items-center gap-6 lg:gap-12">
+        <Link href="/agents" className="flex items-center gap-3 font-semibold tracking-[-.02em] text-[#171b1d]">
+          <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-[#14191d] text-xs font-bold text-white">S</span>
+          <span className="hidden sm:inline">Stellar Agents</span>
+        </Link>
+        <nav className="flex items-center gap-1" aria-label="Workspace navigation">
+          {navItems.map(item => { const active=item.match(pathname); return <Link key={item.href} href={item.href} className={`rounded-full px-3 py-1.5 text-[13px] transition sm:px-4 ${active?"bg-[#f0f2f2] font-medium text-[#181c1e]":"text-[#737a7d] hover:text-[#181c1e]"}`}>{item.label}</Link>; })}
         </nav>
       </div>
-    </header>
-  );
+      <div className="flex items-center gap-4"><span className="hidden text-[13px] text-[#747b7e] md:inline">demo@stellar.ai</span><form action="/auth/logout" method="post"><button type="submit" className="text-[13px] font-medium text-[#202426] hover:text-[#007846]">Sign out</button></form></div>
+    </div>
+  </header>;
 }
