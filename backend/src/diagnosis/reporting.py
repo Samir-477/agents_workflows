@@ -36,6 +36,11 @@ OWNERS = {
     "keyword_cluster": "SEO and Content", "metadata": "Marketing and Content",
     "schema_markup": "Web Engineering and Resort Operations", "content_brief": "Content and Resort Operations",
     "local_seo": "Resort Operations and Content", "content_optimizer": "Content and SEO",
+    "question_discovery": "Content Strategy and Resort Operations",
+    "answer_gap": "Content Strategy and Resort Operations",
+    "answer_optimization": "Content and Resort Operations",
+    "faq_intelligence": "Content Strategy and Resort Operations",
+    "question_intent": "Content Strategy and Marketing",
 }
 
 CLASSIFICATION_LABELS = {
@@ -116,6 +121,34 @@ def _no_finding_management(case):
             "limitation": case["limitations"][0] if case["limitations"] else "No management conclusion can be drawn from the rejected output.",
         }
     defaults = {
+        "question_discovery": {
+            "outcome": " ".join(observations[:2]) or "The agent completed a question inventory without establishing an evidence-backed answer gap.",
+            "care": "The inventory is a planning input for AEO. Observed questions can move into answer-gap validation; inferred questions still require demand and property-fact validation before content work is approved.",
+            "actions": [
+                "Review the highest-priority observed questions and confirm which ones matter to this resort.",
+                "Send approved questions to the Answer Gap Agent to test answer completeness before drafting changes.",
+            ],
+        },
+        "answer_gap": {
+            "outcome": " ".join(observations[:2]) or "Every observed question assessed in the captured scope had a usable answer passage.",
+            "care": "This establishes answer coverage only for the observed question set and captured server HTML. It does not establish broader demand or live answer-engine visibility.",
+            "actions": ["Retain this result as the answer-coverage baseline and rerun it when the page or observed question set changes."],
+        },
+        "answer_optimization": {
+            "outcome": " ".join(observations[:2]) or "Answer Gap retained no verified gap in the captured scope, so there was nothing to draft.",
+            "care": "This agent only drafts from a gap Answer Gap has already verified. An empty result means the observed question set is already answered, not that optimization was skipped.",
+            "actions": ["Retain this result as the answer-optimization baseline and rerun it after the observed question set or page content changes."],
+        },
+        "faq_intelligence": {
+            "outcome": " ".join(observations[:2]) or "Every assessed FAQ category had a retained answer in the captured scope.",
+            "care": "This audit measures coverage against a fixed hospitality baseline, not a confirmed list of this resort's actual customer questions.",
+            "actions": ["Retain this result as the FAQ-coverage baseline and rerun it after Question Discovery, Answer Gap or Answer Optimization results change."],
+        },
+        "question_intent": {
+            "outcome": " ".join(observations[:2]) or "No high-value transactional or comparison gap required reprioritization in the captured scope.",
+            "care": "This agent sequences an existing Answer Gap verdict by journey stage; it does not measure demand volume or re-decide whether a question was actually answered.",
+            "actions": ["Retain this result as the question-routing baseline and rerun it after Question Discovery or Answer Gap results change."],
+        },
         "internal_linking": {
             "outcome": observations[0] if observations else "No defensible contextual-link recommendation involving this resort was retained from the captured sample.",
             "care": "No link change should be approved from this sample alone. The result records the pages checked, but limited crawl coverage cannot establish how well the resort is connected across the full website.",
@@ -141,6 +174,16 @@ def _no_finding_management(case):
             "care": "The result confirms only the technical and content signals this agent inspected. Actual visibility requires a separate, repeatable observation across answer platforms.",
             "actions": ["Keep this result as the on-page readiness baseline.", "Use a separate monitored test if management needs evidence of actual AI mentions or citations."],
         },
+        "serp_competitor": {
+            "outcome": "A dated branded-search sample was captured, but it did not establish a verified visibility fault for this resort page.",
+            "care": "A single dated sample records what the result page returned at capture time. It is not a ranking trend and cannot support a performance judgement on its own.",
+            "actions": ["Confirm the branded query matches how customers actually search for this resort.", "Repeat the capture on a schedule before drawing any conclusion about visibility movement."],
+        },
+        "content_optimizer": {
+            "outcome": "The captured page copy was assessed against the selected intent without retaining a content fault.",
+            "care": "The assessment covers only the copy captured in this run. It does not confirm that the page meets its commercial goal or that the copy is current.",
+            "actions": ["Confirm the intended audience and page goal before approving any copy change.", "Re-assess after the next content update and compare the result with this dated baseline."],
+        },
         "metadata": {
             "outcome": "A page title and search description were present, and neither triggered this diagnosis's missing-field or length rules.",
             "care": "This confirms basic metadata coverage. It does not prove the wording earns clicks or matches every customer search intent.",
@@ -161,7 +204,7 @@ def _no_finding_management(case):
     remaining_observations = [item for item in observations if item not in used_outcome]
     return {
         "section_kind": "assessment", "source": "deterministic", "issue_identified": selected["outcome"],
-        "finding_ids": [], "evidence_ids": [], "evidence_explanations": [],
+        "finding_ids": [], "evidence_ids": case.get("assessment_evidence_ids", []), "evidence_explanations": [],
         "why_management_should_care": selected["care"], "other_findings": remaining_observations,
         "recommended_actions": selected["actions"],
         "limitation": case["limitations"][0] if case["limitations"] else "The conclusion is limited to the captured resort page and supporting sample.",
@@ -184,8 +227,37 @@ def assemble_report(run):
         duplicate = category or title.casefold()
         if duplicate in seen:
             existing = seen[duplicate]
-            if agent not in existing["supporting_agents"] and existing["primary_agent"] != agent:
+            is_new_source = agent not in existing["supporting_agents"] and existing["primary_agent"] != agent
+            if is_new_source:
                 existing["supporting_agents"].append(agent)
+                detail = evidence_detail or {}
+                eid = "E-" + hashlib.sha256((str(duplicate) + agent + url).encode()).hexdigest()[:10]
+                evidence[eid] = {
+                    "id": eid, "title": detail.get("title") or "Supporting assessment",
+                    "source_label": detail.get("source_label") or "Connected agent result",
+                    "source_kind": detail.get("source_kind") or "agent_output",
+                    "source_url": source_url or detail.get("source_url") or url,
+                    "observed": detail.get("observed") or observation,
+                    "observed_value": detail.get("observed_value") or observation,
+                    "expected_value": detail.get("expected_value"),
+                    "location": detail.get("location") or "Connected agent output",
+                    "excerpt": detail.get("excerpt"), "fix_example": detail.get("fix_example"),
+                    "fix_label": detail.get("fix_label"), "presentation_kind": detail.get("presentation_kind") or "standard",
+                    "captured_at": detail.get("captured_at") or capture.get("captured_at", run.created_at),
+                    "method": detail.get("method") or "Connected-agent assessment",
+                    "confidence": detail.get("confidence") or ("high" if classification == "confirmed" else "medium"),
+                    "support_type": detail.get("support_type") or ("direct" if classification == "confirmed" else "heuristic"),
+                    "verification": detail.get("verification") or "Review the supporting assessment against the saved source.",
+                    "visual_url": detail.get("visual_url"), "agent": agent,
+                }
+                existing["evidence_ids"].append(eid)
+            # Connected AEO agents describe successive stages of one issue.
+            # Keep one intelligence action and let the implementation-stage
+            # agent refine that action instead of adding another row.
+            if agent == "answer_optimization":
+                existing["action"] = action
+                existing["owner"] = OWNERS[agent]
+                existing["completion_criteria"] = (evidence_detail or {}).get("completion_criteria") or existing["completion_criteria"]
             return existing["id"]
         fid = "F-" + hashlib.sha256((duplicate + url).encode()).hexdigest()[:10]
         eid = "E-" + fid[2:]
@@ -216,10 +288,28 @@ def assemble_report(run):
                    "action": action, "classification": classification, "priority": priority,
                    "classification_label": CLASSIFICATION_LABELS[classification],
                    "primary_agent": agent, "supporting_agents": [], "evidence_ids": [eid],
-                   "owner": OWNERS[agent], "completion_criteria": detail.get("completion_criteria") or evidence[eid]["verification"]}
+                   "owner": OWNERS[agent], "completion_criteria": detail.get("completion_criteria") or evidence[eid]["verification"],
+                   "lineage_id": duplicate if str(duplicate).startswith("aeo-question:") else None}
         findings.append(finding)
         seen[duplicate] = finding
         return fid
+
+    def retain_assessment_evidence(agent, category, *, title, observed_value, excerpt, expected_value,
+                                   source_url=None, source_kind="agent_output", method="Agent assessment",
+                                   confidence="medium", support_type="planning", location="Assessment output",
+                                   verification="Review the saved source data and repeat the assessment."):
+        """Retain useful non-finding evidence without promoting it to an implementation issue."""
+        eid = "E-A-" + hashlib.sha256((agent + category + url).encode()).hexdigest()[:10]
+        evidence[eid] = {
+            "id": eid, "title": title, "source_label": LABELS[agent], "source_kind": source_kind,
+            "source_url": source_url or url, "observed": observed_value, "observed_value": observed_value,
+            "expected_value": expected_value, "location": location, "excerpt": excerpt,
+            "fix_example": None, "fix_label": None, "presentation_kind": "standard",
+            "captured_at": capture.get("captured_at", run.created_at), "method": method,
+            "confidence": confidence, "support_type": support_type, "verification": verification,
+            "visual_url": None, "agent": agent,
+        }
+        return eid
 
     for key, heading in AGENTS.items():
         if key not in run.tasks:
@@ -228,6 +318,7 @@ def assemble_report(run):
         detail = task.result.get("detail", {})
         case = {"agent": key, "agent_label": LABELS[key], "heading": heading, "status": task.status,
                 "run_id": task.run_id, "finding_ids": [], "observations": [], "proposed_outputs": [],
+                "assessment_evidence_ids": [],
                 "limitations": list(detail.get("limitations", detail.get("evidence_limitations", []))),
                 "owner": OWNERS[key], "output_quality": "usable" if task.status == "complete" else "insufficient_evidence"}
         def found(*args, **kwargs):
@@ -437,7 +528,17 @@ def assemble_report(run):
                     case["proposed_outputs"] = ["Proposed title: " + brief.get("suggested_title", ""), *(s["heading"] for s in brief.get("outline", []))]
                 else:
                     case["output_quality"] = "rejected"
-                    case["observations"].append("The generated brief was excluded from management recommendations because it was not ready for handoff or scored below 70/100.")
+                    # Name the gate that actually failed. The combined sentence
+                    # implied a low quality score even when the draft scored well.
+                    reasons = []
+                    if not detail.get("ready_for_handoff"):
+                        reasons.append("the draft is not marked ready for editorial handoff")
+                    if quality is not None and quality < 70:
+                        reasons.append(f"its draft quality check scored {quality}/100, below the 70/100 gate")
+                    case["observations"].append(
+                        "The generated brief was excluded from management recommendations because "
+                        + " and ".join(reasons or ["the draft did not pass the report quality gate"]) + "."
+                    )
                 case["observations"].append("Draft handoff: " + ("ready for editorial review" if detail.get("ready_for_handoff") else "not ready"))
                 if detail.get("quality_score") is not None:
                     case["observations"].append(f"Draft quality-check score: {detail['quality_score']}/100. This grades the proposal, not the live page.")
@@ -477,6 +578,294 @@ def assemble_report(run):
                                        "expected_value": "Apply the recommendation only after reviewing the cited page element in context.",
                                        "support_type": "direct" if linked and all(item.get("source_type") == "page" for item in linked) else "heuristic",
                                        "confidence": a.get("confidence", "medium")})
+        elif key == "question_discovery":
+            questions = detail.get("questions", [])
+            observed = [item for item in questions if item.get("evidence_status") == "observed"]
+            inferred = [item for item in questions if item.get("evidence_status") == "inferred"]
+            case["observations"].append(
+                f"Discovered {len(questions)} question candidates: {len(observed)} observed in page or search evidence and {len(inferred)} labelled planning hypotheses."
+            )
+            case["observations"].append(
+                f"Observed-question coverage hint: {detail.get('observed_coverage_score') if detail.get('observed_coverage_score') is not None else 'not scored'}; "
+                f"discovery evidence confidence: {detail.get('discovery_confidence_score', 0)}/100."
+            )
+            case["proposed_outputs"] = [
+                f"{item['question']} | {item['intent']} | {item['page_coverage']} | {item['evidence_status']}"
+                for item in questions[:20]
+            ]
+            inventory_lines = [
+                f"{item['id']} | {item['evidence_status']} | {item['page_coverage']} | {item['question']}"
+                for item in questions[:20]
+            ]
+            case["assessment_evidence_ids"].append(retain_assessment_evidence(
+                key,
+                "question-inventory",
+                title="Question inventory and provenance",
+                observed_value=(
+                    f"{len(questions)} candidates retained: {len(observed)} observed and "
+                    f"{len(inferred)} inferred; among observed questions, {detail.get('explicit_answer_count', 0)} had a heading-level coverage signal and "
+                    f"{detail.get('unanswered_count', 0)} had no matching captured-text signal."
+                ),
+                excerpt="\n".join(inventory_lines) or "No question candidates were retained.",
+                expected_value="Observed questions and inferred planning hypotheses remain separately labelled; coverage is validated by the Answer Gap Agent before copy changes.",
+                source_kind="serp_and_page" if observed else "planning_framework",
+                method="Deduplicated page headings, available Google question features and the resort-question framework",
+                confidence="high" if observed else "medium",
+                support_type="direct" if observed else "planning",
+                location="Question Discovery inventory",
+                verification="Open the listed sources, confirm each observed question and review inferred candidates before approving an Answer Gap run.",
+            ))
+            # Discovery identifies demand and prepares an Answer Gap handoff.
+            # It must not convert a lexical coverage hint into a website fault
+            # or a copy recommendation; factual answer validation belongs to
+            # the downstream Answer Gap specialist.
+            case["limitations"].extend(detail.get("limitations", []))
+        elif key == "answer_gap":
+            assessments = detail.get("assessments", [])
+            case["observations"].append(
+                f"Assessed {len(assessments)} observed questions: {detail.get('answered_count', 0)} answered, "
+                f"{detail.get('partial_count', 0)} partial, {detail.get('missing_count', 0)} missing and "
+                f"{detail.get('unable_to_verify_count', 0)} unable to verify."
+            )
+            if detail.get("answer_readiness_score") is not None:
+                case["observations"].append(f"Answer readiness across assessable observed questions: {detail['answer_readiness_score']}/100.")
+            for gap in detail.get("prioritized_gaps", []):
+                passage = gap.get("passage") or {}
+                observed_value = (
+                    f"{gap['question_id']}: {gap['question']}\n"
+                    f"Assessment: {gap['status'].replace('_', ' ')}. {gap['reason']}"
+                )
+                found(
+                    f"{gap['question']} — {gap['status'].replace('_', ' ')} answer",
+                    observed_value,
+                    "An observed customer question cannot be answered reliably from the strongest captured passage.",
+                    gap["recommended_action"],
+                    "confirmed" if gap["status"] == "missing" else "review",
+                    gap.get("priority", "medium"),
+                    category=f"aeo-question:{gap.get('lineage_id', gap['question_id'])}",
+                    evidence_detail={
+                        "title": f"Answer assessment for {gap['question_id']}",
+                        "source_label": "Selected resort page and Question Discovery",
+                        "source_kind": "answer_passage",
+                        "source_url": passage.get("source_url") or url,
+                        "observed_value": observed_value,
+                        "excerpt": passage.get("excerpt") or "No matching answer passage was retained.",
+                        "expected_value": "One direct, complete, extractable passage supported by approved property facts.",
+                        "location": passage.get("location") or "No matching captured passage",
+                        "method": "Observed-question passage retrieval and deterministic answer-quality checks",
+                        "support_type": "direct" if gap["status"] == "missing" else "heuristic",
+                        "confidence": "high" if gap["status"] == "missing" else "medium",
+                        "verification": gap["completion_check"],
+                        "completion_criteria": gap["completion_check"],
+                    },
+                )
+            case["assessment_evidence_ids"].append(retain_assessment_evidence(
+                key, "answer-coverage-matrix", title="Observed-question answer coverage",
+                observed_value=f"{len(assessments)} observed questions assessed; {len(detail.get('prioritized_gaps', []))} verified gaps retained.",
+                excerpt="\n".join(
+                    f"{item['question_id']} | {item['status']} | {item['answer_quality_score']}/100 | {item['question']}"
+                    for item in assessments[:30]
+                ) or "No observed question was available for assessment.",
+                expected_value="Each observed question is linked to a captured answer passage or an explicit missing-answer result.",
+                source_kind="answer_passage", method="Question-to-passage retrieval and answer-quality classification",
+                confidence="high" if assessments else "low", support_type="direct" if assessments else "insufficient",
+                location="Answer coverage matrix",
+                verification="Review each question, retained passage and status against the captured page.",
+            ))
+            case["limitations"].extend(detail.get("limitations", []))
+        elif key == "answer_optimization":
+            items = detail.get("optimized_answers", [])
+            case["observations"].append(
+                f"Processed {detail.get('gap_count', 0)} verified gaps: {detail.get('drafted_count', 0)} drafted, "
+                f"{detail.get('fallback_count', 0)} auto-condensed and {detail.get('needs_facts_count', 0)} need property facts."
+            )
+            if detail.get("drafting_unavailable_count"):
+                case["observations"].append(
+                    f"{detail['drafting_unavailable_count']} gap(s) could not be attempted this run because the "
+                    "drafting provider was unavailable; rerun this agent to attempt them."
+                )
+            if detail.get("optimization_coverage_score") is not None:
+                case["observations"].append(f"Optimization coverage across draftable gaps: {detail['optimization_coverage_score']}/100.")
+            for item in items:
+                # A missing answer was already the confirmed problem at Answer
+                # Gap; a partial answer is a review item until an editor
+                # approves the rewrite. Keep the same classification the
+                # underlying gap already carries rather than relabeling it.
+                classification = "confirmed" if item["status"] == "needs_facts" else "review"
+                if item["status"] == "drafted":
+                    title, action = f"{item['question']} — direct answer drafted", "Review and approve the drafted answer, then publish it in the most relevant page section."
+                elif item["status"] == "fallback_extractive" and item.get("fallback_reason") in {"provider_unavailable", "no_draft_returned"}:
+                    title, action = f"{item['question']} — drafting unavailable this run", "The drafting provider did not return a usable draft this run. Rerun this agent; the retained passage is shown in the meantime."
+                elif item["status"] == "fallback_extractive":
+                    title, action = f"{item['question']} — draft needs manual editing", "The automatic draft did not pass validation; edit the retained passage into a direct 40-60 word answer."
+                else:
+                    title, action = f"{item['question']} — needs property facts", item["checklist_action"]
+                found(
+                    title,
+                    item.get("draft_answer") or item.get("reason") or "No draftable passage was retained for this question.",
+                    "An observed customer question verified as missing or incomplete does not yet have an approved direct answer.",
+                    action,
+                    classification,
+                    item.get("priority", "medium"),
+                    category=f"aeo-question:{item.get('lineage_id', item['question_id'])}",
+                    evidence_detail={
+                        "title": f"Answer draft for {item['question_id']}",
+                        "source_label": "Selected resort page and Answer Gap",
+                        "source_kind": "drafted_answer",
+                        "source_url": item.get("source_url") or url,
+                        "observed_value": item.get("source_excerpt") or "No retained passage.",
+                        "excerpt": item.get("source_excerpt") or "No retained passage.",
+                        "expected_value": "A 40-60 word direct answer grounded entirely in the retained passage.",
+                        "location": f"Answer Optimization draft for {item['question_id']}",
+                        "method": "Passage-grounded drafting with lexical, ordering, polarity and numeric checks against the source passage",
+                        "support_type": "direct" if item["status"] == "drafted" else "heuristic",
+                        "confidence": "high" if item["status"] == "drafted" else "medium",
+                        "verification": item.get("reason") or "Compare the draft against the retained passage.",
+                        # Only a validated, grounded draft is offered as a ready-to-review
+                        # replacement. A fallback excerpt or a checklist item is not.
+                        "fix_example": item.get("draft_answer") if item["status"] == "drafted" else None,
+                        "fix_label": "Suggested direct answer" if item["status"] == "drafted" else None,
+                        "completion_criteria": (
+                            "A reviewer confirms every fact in the draft against the approved property record and approves it for publication."
+                            if item["status"] != "needs_facts" else
+                            "The property team confirms the fact and an approved sentence answering the question is added to the page."
+                        ),
+                    },
+                )
+            case["assessment_evidence_ids"].append(retain_assessment_evidence(
+                key, "answer-optimization-queue", title="Answer optimization queue",
+                observed_value=f"{len(items)} verified gaps processed; {detail.get('drafted_count', 0)} produced a validated draft.",
+                excerpt="\n".join(
+                    f"{item['question_id']} | {item['status']} | {item.get('word_count', '—')}w | {item['question']}"
+                    for item in items[:30]
+                ) or "No verified gap was available to optimize.",
+                expected_value="Each verified gap either receives a grounded, word-checked direct answer or an explicit fact-gathering action.",
+                source_kind="drafted_answer", method="Passage-grounded drafting with deterministic grounding and length validation",
+                confidence="high" if items else "low", support_type="direct" if items else "insufficient",
+                location="Answer optimization queue",
+                verification="Review each drafted answer against its source passage before publishing.",
+            ))
+            case["limitations"].extend(detail.get("limitations", []))
+        elif key == "faq_intelligence":
+            entries = detail.get("faq_entries", [])
+            case["observations"].append(
+                f"{detail.get('ready_count', 0)} of {detail.get('assessed_category_count', 0)} assessed FAQ categories are covered, "
+                f"{detail.get('needs_review_count', 0)} need editorial review, {detail.get('not_covered_count', 0)} are verified "
+                f"gaps and {detail.get('no_question_count', 0)} have no observed demand."
+            )
+            for item in entries:
+                # An unassessed baseline category is a research limitation,
+                # not an implementation issue. Keep it in the matrix and out
+                # of the management action queue until demand is observed.
+                if item["status"] in {"covered", "not_assessed"}:
+                    continue
+                # A verified gap (a real observed question Answer Gap checked
+                # and found nothing for) is a stronger, more actionable
+                # signal than a category with no observed question at all —
+                # keep that distinction in the classification, not just the text.
+                if item["status"] == "needs_editorial_review":
+                    classification, priority = "review", "medium"
+                    title, action = f"{item['category']} FAQ needs editorial review", f"Review the captured passage and confirm it directly and completely answers the {item['category'].lower()} question before publishing it as an FAQ entry."
+                elif item["question_id"] is not None:
+                    classification, priority = "confirmed", "high"
+                    title, action = f"{item['category']} FAQ is not covered", item["content_gap_action"]
+                else:
+                    classification, priority = "confirmed", "high"
+                    title, action = f"{item['category']} FAQ is not covered", item["content_gap_action"]
+                found(
+                    title,
+                    item.get("answer") or item["reason"],
+                    "An observed resort FAQ category lacks a complete retained answer on the captured page.",
+                    action,
+                    classification,
+                    priority,
+                    category=(f"aeo-question:{item['lineage_id']}" if item.get("lineage_id") else f"faq-intelligence:{item['category']}"),
+                    evidence_detail={
+                        "title": f"FAQ audit for {item['category']}",
+                        "source_label": "Selected resort page, Answer Gap and Answer Optimization",
+                        "source_kind": "faq_category_audit",
+                        "source_url": item.get("source_url") or url,
+                        "observed_value": item.get("answer") or item["reason"],
+                        "excerpt": item.get("answer") or "No retained answer for this category.",
+                        "expected_value": "A validated answer covering this standard resort FAQ category.",
+                        "location": f"FAQ coverage matrix · {item['category']}",
+                        "method": "Category rollup over Question Discovery, Answer Gap and Answer Optimization evidence",
+                        "support_type": "direct" if item["evidence_source"] else "insufficient",
+                        "confidence": "high" if item["evidence_source"] else "low",
+                        "verification": item["reason"],
+                        # This agent audits coverage; it never drafts a
+                        # replacement, so it never offers its own "Fix it" panel.
+                        "fix_example": None, "fix_label": None,
+                        "completion_criteria": "The property team confirms the missing fact and an approved answer for this category is added to the page.",
+                    },
+                )
+            case["assessment_evidence_ids"].append(retain_assessment_evidence(
+                key, "faq-coverage-matrix", title="FAQ coverage matrix",
+                observed_value=f"{detail.get('ready_count', 0)} of {detail.get('assessed_category_count', 0)} assessed categories covered.",
+                excerpt="\n".join(f"{item['category']} | {item['status']} | {item['question']}" for item in entries) or "No category was assessed.",
+                expected_value="Every observed FAQ category has a retained answer; generated drafts remain subject to editorial review.",
+                source_kind="faq_category_audit", method="Category rollup over Question Discovery, Answer Gap and Answer Optimization evidence",
+                confidence="high" if entries else "low", support_type="direct" if entries else "insufficient",
+                location="FAQ coverage matrix",
+                verification="Review each category's status and source evidence against the captured page.",
+            ))
+            case["limitations"].extend(detail.get("limitations", []))
+        elif key == "question_intent":
+            distribution = detail.get("distribution", [])
+            case["observations"].append(
+                "Observed journey-stage distribution: " + ", ".join(f"{row['intent']} {row['share']}%" for row in distribution if row["count"]) or "No observed question was classified in this run."
+            )
+            if detail.get("used_answer_gap"):
+                case["observations"].append(f"{detail.get('reprioritized_gap_count', 0)} verified gap(s) sequenced with the disclosed journey-stage heuristic.")
+            strategy_by_intent = {row["intent"]: row for row in detail.get("content_strategy", [])}
+            for item in detail.get("reprioritized_gaps", []):
+                # The underlying answered/partial/missing verdict always
+                # comes from Answer Gap; this agent only changes how urgently
+                # it should be worked, never whether it counts as a gap.
+                classification = "confirmed" if item["gap_status"] == "missing" else "review"
+                stage = item.get("journey_stage", item["intent"])
+                strategy = strategy_by_intent.get(stage)
+                action = (
+                    f"Route to {strategy['recommended_agent_label']}: {strategy['reason']}"
+                    if strategy else "Prioritize this answer ahead of lower-value gaps."
+                )
+                found(
+                    f"{item['question']} — {stage.lower()}-stage question needs an answer",
+                    f"{item['question_id']}: {item['gap_status']}. {item['reason']}",
+                    f"This observed {stage.lower()}-stage gap should be sequenced using the stated heuristic; conversion impact was not measured.",
+                    action,
+                    classification,
+                    item["priority"],
+                    category=f"aeo-question:{item.get('lineage_id', item['question_id'])}",
+                    evidence_detail={
+                        "title": f"Journey-weighted priority for {item['question_id']}",
+                        "source_label": "Question Discovery and Answer Gap",
+                        "source_kind": "intent_reprioritization",
+                        "source_url": url,
+                        "observed_value": f"{stage} stage, {item['intent']} intent, Answer Gap status: {item['gap_status']}.",
+                        "excerpt": item["question"],
+                        "expected_value": "Verified gaps are sequenced using the stated journey-stage heuristic and reviewed by the assigned owner.",
+                        "location": f"Question Intent · {stage}",
+                        "method": "Journey-stage classification with transparent reweighting of Answer Gap's verdict",
+                        "support_type": "direct", "confidence": "high",
+                        "verification": item["reason"],
+                        # This agent reprioritizes; it never drafts a
+                        # replacement, so it never offers its own "Fix it" panel.
+                        "fix_example": None, "fix_label": None,
+                        "completion_criteria": "Answer Gap and, where used, Answer Optimization confirm this question now has an approved answer.",
+                    },
+                )
+            case["assessment_evidence_ids"].append(retain_assessment_evidence(
+                key, "question-intent-distribution", title="Observed question journey distribution",
+                observed_value=f"{detail.get('observed_question_count', 0)} observed questions classified; {detail.get('hypothesis_question_count', 0)} planning hypotheses kept separate.",
+                excerpt="\n".join(f"{row['intent']} | {row['count']} questions | {row['share']}%" for row in distribution) or "No question was classified.",
+                expected_value="Observed questions are separated from hypotheses and classified by journey stage, query intent and topic.",
+                source_kind="intent_distribution", method="Journey-stage keyword classification over Question Discovery's observed question inventory",
+                confidence="high" if distribution else "low", support_type="direct" if distribution else "insufficient",
+                location="Observed question journey distribution",
+                verification="Review the classified questions and, where available, the reprioritized gap list against the captured page.",
+            ))
+            case["limitations"].extend(detail.get("limitations", []))
         case["limitations"] = list(dict.fromkeys(case["limitations"]))
         cases.append(case)
     priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -499,7 +888,10 @@ def assemble_report(run):
             "medium": {"label": "Validate next", "timeframe": "Confirm with a repeatable check"},
             "low": {"label": "Review backlog", "timeframe": "Approve after contextual review"},
         }.get(case_priority, {"label": "Monitor", "timeframe": "Retest when evidence changes"})
-        evidence_ids = list(dict.fromkeys(eid for item in related for eid in item["evidence_ids"]))
+        evidence_ids = list(dict.fromkeys(
+            [eid for item in related for eid in item["evidence_ids"]]
+            + case.get("assessment_evidence_ids", [])
+        ))
         useful_observations = [
             item for item in case["observations"]
             if not re.match(r"^\d+\.\s", item) and not item.startswith("Idea to investigate:")
@@ -554,7 +946,7 @@ def assemble_report(run):
         limitations.append("Some extracted content was truncated; absence checks require further review.")
     agent_reports, session_score = build_agent_reports(run, capture, cases, findings, evidence)
     session_intelligence = build_session_intelligence(agent_reports, findings)
-    return {"version": 7, "diagnosis_id": run.id, "generated_at": now(), "captured_at": capture.get("captured_at"),
+    return {"version": 8, "diagnosis_id": run.id, "generated_at": now(), "captured_at": capture.get("captured_at"),
             "title": f"{research_query} website diagnosis", "page_url": url,
             "research_query": research_query, "identity": identity,
             "scope": [p["final_url"] for p in pages], "overview": overview,

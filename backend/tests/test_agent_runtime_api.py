@@ -44,7 +44,8 @@ def test_shared_app_registers_audit_and_metadata_agent_routes():
     assert settings.status_code == 200
     assert all("api_key" not in item for item in settings.json()["providers"])
     assert [item["provider"] for item in settings.json()["providers"]] == ["groq"]
-    assert len(settings.json()["model_options"]) == 4
+    # qwen/qwen3.6-27b was retired by Groq and removed from the selectable list.
+    assert len(settings.json()["model_options"]) == 3
     assert app.title == "Stellar Agents API"
     assert "/api/agents/meta-title-description/generations" in schema["paths"]
     assert "/api/agents/internal-linking/audits" in schema["paths"]

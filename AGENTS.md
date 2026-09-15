@@ -4,6 +4,8 @@ Before planning or implementing this project, read `PROJECT_CONTEXT.md`.
 
 Treat that document as the durable product and architecture brief for the SEO/AEO Audit Agent. Keep it current when the product scope, architectural decisions, or MVP boundaries change materially.
 
+Before planning or implementing AEO or GEO agents, use the repository skills in `.agents/skills/aeo` and `.agents/skills/seo-geo`. Treat their methodologies as research input: verify time-sensitive platform behavior, crawler identities, metrics, and ranking claims against primary sources before encoding them in the production pipeline.
+
 Do not present inferred details about Dual7's private implementation as confirmed facts. Preserve the distinction between:
 
 - capabilities stated in the supplied Dual7 product copy;

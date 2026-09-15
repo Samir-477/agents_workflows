@@ -9,6 +9,7 @@ const dependencies:Record<string,string[]>={
   keyword_cluster:["serp_competitor"],
   content_brief:["serp_competitor","keyword_cluster"],
   content_optimizer:["serp_competitor","keyword_cluster","content_brief"],
+  answer_gap:["question_discovery"],
 };
 
 const activeAgents=agents.filter(agent=>agent.status==="active"&&agent.diagnosisId);

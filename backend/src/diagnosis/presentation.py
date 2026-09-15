@@ -65,6 +65,36 @@ AGENT_SCORE_AREAS: dict[str, list[tuple[str, tuple[str, ...]]]] = {
         ("Structure", ("heading", "structure", "section")),
         ("Evidence and clarity", ("evidence", "clarity", "readab")),
     ],
+    "question_discovery": [
+        ("Observed question evidence", ("observed", "question", "search")),
+        ("Topic coverage", ("coverage", "answer", "topic")),
+        ("Intent and journey mapping", ("intent", "journey", "customer")),
+        ("Cross-engine handoff", ("seo", "aeo", "geo", "handoff")),
+    ],
+    "answer_gap": [
+        ("Directness", ("direct", "answer", "question")),
+        ("Completeness", ("complete", "missing", "partial")),
+        ("Extractability", ("extract", "passage", "section")),
+        ("Factual support", ("fact", "evidence", "support")),
+    ],
+    "answer_optimization": [
+        ("Grounding fidelity", ("grounded", "unsupported", "passage")),
+        ("Draft coverage", ("draft", "coverage", "partial")),
+        ("Length compliance", ("length", "word", "target")),
+        ("Handoff readiness", ("review", "approval", "editorial")),
+    ],
+    "faq_intelligence": [
+        ("Category coverage", ("covered", "category", "ready")),
+        ("Editorial readiness", ("review", "editorial", "draft")),
+        ("Verified gaps", ("missing", "not covered", "gap")),
+        ("Observed demand", ("observed", "question", "surfaced")),
+    ],
+    "question_intent": [
+        ("High-value coverage", ("transactional", "comparison", "high-value")),
+        ("Funnel distribution", ("distribution", "share", "informational")),
+        ("Business-impact priority", ("weighted", "priority", "impact")),
+        ("Content-strategy routing", ("route", "handoff", "strategy")),
+    ],
 }
 
 METHODS: dict[str, list[dict[str, str]]] = {
@@ -118,6 +148,36 @@ METHODS: dict[str, list[dict[str, str]]] = {
         {"title": "Score assessed checks", "description": "Exclude checks that lack enough evidence instead of treating them as failures."},
         {"title": "Build the improvement queue", "description": "Tie every retained action to a section and evidence record."},
     ],
+    "question_discovery": [
+        {"title": "Resolve the resort subject", "description": "Use the shared page capture to identify the property, destination and page role."},
+        {"title": "Collect and consolidate questions", "description": "Combine captured question headings with a dated Google question sample when available, then deduplicate variants."},
+        {"title": "Map coverage and intent", "description": "Classify intent, journey stage and page coverage while preserving observed versus inferred provenance."},
+        {"title": "Prepare connected handoffs", "description": "Send validated themes to SEO, answer checks to AEO and prompt seeds to GEO without claiming unmeasured demand."},
+    ],
+    "answer_gap": [
+        {"title": "Reuse observed questions", "description": "Consume saved Question Discovery output or perform bounded discovery inside a standalone run."},
+        {"title": "Retrieve answer passages", "description": "Locate the strongest captured passage for each observed question without treating its heading as an answer."},
+        {"title": "Assess answer quality", "description": "Measure directness, completeness, extractability and factual support with explicit rules."},
+        {"title": "Retain verified gaps", "description": "Route only missing and incomplete observed answers to Answer Optimization."},
+    ],
+    "answer_optimization": [
+        {"title": "Reuse verified gaps", "description": "Consume saved Answer Gap output or perform bounded discovery and gap analysis inside a standalone run."},
+        {"title": "Draft from the retained passage only", "description": "Compress a partial answer's own captured passage into a 40-60 word direct answer; a missing answer has no passage to draft from."},
+        {"title": "Validate every draft", "description": "Reject any draft that introduces a word absent from its source passage, falling back to a condensed excerpt of that passage instead."},
+        {"title": "Route what cannot be drafted", "description": "Give a missing answer a fact-gathering action for the property team rather than an invented answer."},
+    ],
+    "faq_intelligence": [
+        {"title": "Fix the audit taxonomy", "description": "Use a set hospitality FAQ categories rather than inventing one per resort."},
+        {"title": "Classify every discovered question", "description": "Sort observed and inferred questions into that taxonomy independently of their discovery-time intent label."},
+        {"title": "Take the strongest evidence per category", "description": "Prefer a validated Answer Optimization draft, then an Answer Gap answered passage, before treating a category as covered."},
+        {"title": "Route uncovered categories", "description": "Give a category with no verified answer a fact-gathering action instead of a fabricated FAQ entry."},
+    ],
+    "question_intent": [
+        {"title": "Separate stage, intent and topic", "description": "Classify each question across three distinct dimensions instead of combining them into one ambiguous label."},
+        {"title": "Report observed-question distribution", "description": "Measure the journey-stage mix from observed questions only; retain inferred questions as separate planning hypotheses."},
+        {"title": "Sequence verified gaps", "description": "Reorder Answer Gap's missing and partial answers using a transparent stage heuristic without claiming measured commercial impact."},
+        {"title": "Route each stage", "description": "Recommend the specialist best suited to each observed journey stage."},
+    ],
 }
 
 PRIORITY_PENALTY = {"critical": 28, "high": 20, "medium": 11, "low": 5}
@@ -128,6 +188,7 @@ AGENT_ENGINES = {
     "keyword_cluster": "SEO", "metadata": "SEO", "content_brief": "SEO",
     "local_seo": "SEO", "content_optimizer": "SEO",
     "schema_markup": "AEO", "ai_visibility": "GEO",
+    "question_discovery": "AEO", "answer_gap": "AEO", "answer_optimization": "AEO", "faq_intelligence": "AEO", "question_intent": "AEO",
 }
 
 
@@ -144,6 +205,8 @@ def _native_score(detail: dict[str, Any]) -> tuple[int | None, str | None]:
         ("site_score", "Native technical audit score"),
         ("overall_score", "Native assessed-check score"),
         ("quality_score", "Validated output-quality score"),
+        ("question_coverage_score", "Question coverage across the assessed discovery set"),
+        ("answer_readiness_score", "Answer readiness across assessable observed questions"),
     ):
         score = _number(detail.get(key))
         if score is not None:
@@ -195,7 +258,9 @@ def _score_areas(agent: str, detail: dict[str, Any], findings: list[dict[str, An
 
 
 def _status(score: int, output_quality: str, task_status: str) -> dict[str, str]:
-    if output_quality == "rejected" or task_status in {"failed", "needs_review"}:
+    if output_quality == "rejected":
+        return {"label": "Excluded from use", "tone": "review"}
+    if task_status in {"failed", "needs_review"}:
         return {"label": "Needs review", "tone": "review"}
     if score >= 85:
         return {"label": "Strong", "tone": "strong"}
@@ -287,8 +352,43 @@ def _measurements(agent: str, detail: dict[str, Any], capture: dict[str, Any], f
             ("Checks available", detail.get("total_checks", len(detail.get("assessments", []))), "Configured checks"),
             ("Retained actions", len(detail.get("actions", [])), "Agent output"),
         ],
+        "question_discovery": [
+            ("Questions discovered", len(detail.get("questions", [])), "Observed and labelled inferred candidates"),
+            ("Observed questions", detail.get("observed_question_count", 0), "Page or Google question evidence"),
+            ("Research hypotheses", detail.get("inferred_question_count", 0), "Planning candidates excluded from page findings"),
+            ("Answer Gap candidates", len(detail.get("answer_gap_candidate_ids", [])), "Observed questions awaiting answer validation"),
+        ],
+        "answer_gap": [
+            ("Observed questions assessed", detail.get("question_count", 0), "Inferred hypotheses excluded"),
+            ("Answered", detail.get("answered_count", 0), "Direct usable passage retained"),
+            ("Partial answers", detail.get("partial_count", 0), "Needs completion"),
+            ("Missing answers", detail.get("missing_count", 0), "No matching passage retained"),
+        ],
+        "answer_optimization": [
+            ("Verified gaps received", detail.get("gap_count", 0), "From Answer Gap"),
+            ("Drafted answers", detail.get("drafted_count", 0), "Grounded and word-checked"),
+            ("Auto-condensed fallbacks", detail.get("fallback_count", 0), "Draft rejected or unavailable this run"),
+            ("Needs property facts", detail.get("needs_facts_count", 0), "No retained passage to draft from"),
+        ],
+        "faq_intelligence": [
+            ("Categories covered", detail.get("ready_count", 0), f"Of {detail.get('assessed_category_count', 0)} categories with observed questions"),
+            ("Needs editorial review", detail.get("needs_review_count", 0), "Captured but not yet complete"),
+            ("Verified gaps", detail.get("not_covered_count", 0), "Observed question checked, no answer found"),
+            ("No demand observed", detail.get("no_question_count", 0), "No observed question in this category"),
+        ],
+        "question_intent": [
+            ("Questions classified", detail.get("question_count", 0), "Observed and inferred"),
+            ("High-value questions", detail.get("high_value_question_count", 0), "Transactional or comparison intent"),
+            ("Reprioritized gaps", detail.get("reprioritized_gap_count", 0), "High-value gaps needing action first"),
+            ("Funnel stages present", sum(row["count"] > 0 for row in detail.get("distribution", [])), "Out of 5 fixed stages"),
+        ],
     }
     return [{"label": label, "value": str(value), "note": note} for label, value, note in values[agent]]
+
+
+def _clip_step(value: Any, limit: int = 120) -> str:
+    text = " ".join(str(value or "").split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
 def _effort(finding: dict[str, Any]) -> str:
@@ -302,6 +402,57 @@ def _effort(finding: dict[str, Any]) -> str:
 
 def _timeframe(priority: str) -> str:
     return {"critical": "This week", "high": "This week", "medium": "This month", "low": "This quarter"}.get(priority, "Next review")
+
+
+def _success_metrics(agent: str, detail: dict[str, Any], score: int, critical: int, findings: int, measurements: list[dict[str, str]] | None = None) -> list[dict[str, str]]:
+    if agent == "question_discovery":
+        return [
+            {"metric": "Observed source types", "current": str(len(detail.get("evidence_quality", {}).get("observed_source_types", []))), "target": "Reviewed for sufficiency", "window": "Before downstream diagnosis", "basis": "Distinct dated sources, excluding the planning framework"},
+            {"metric": "Observed questions", "current": str(detail.get("observed_question_count", 0)), "target": "Approved, merged or rejected", "window": "Discovery review", "basis": "Page headings and dated search-question features only"},
+            {"metric": "Answer Gap candidates", "current": str(len(detail.get("answer_gap_candidate_ids", []))), "target": "Validated by Answer Gap", "window": "Next analysis", "basis": "Coverage hints are routing signals, not website findings"},
+        ]
+    if agent == "answer_gap":
+        return [
+            {"metric": "Observed questions assessed", "current": str(detail.get("question_count", 0)), "target": "Reassessed after approved changes", "window": "Next validated rerun", "basis": "Inferred hypotheses excluded"},
+            {"metric": "Answer readiness", "current": str(detail.get("answer_readiness_score", "Not scored")), "target": "85 or higher", "window": "Next validated rerun", "basis": "Observed questions with assessable captured page evidence"},
+            {"metric": "Missing answers", "current": str(detail.get("missing_count", 0)), "target": "0 unresolved", "window": "After approved content changes", "basis": "Verified observed-question gaps"},
+            {"metric": "Partial answers", "current": str(detail.get("partial_count", 0)), "target": "0 unresolved", "window": "After approved content changes", "basis": "Captured passages below the completeness threshold"},
+        ]
+    if agent == "answer_optimization":
+        return [
+            {"metric": "Optimization coverage", "current": str(detail.get("optimization_coverage_score", "Not scored")), "target": "85 or higher", "window": "Next validated rerun", "basis": "Share of draftable gaps that passed grounding and length validation"},
+            {"metric": "Drafted answers ready for review", "current": str(detail.get("drafted_count", 0)), "target": "Reviewed and approved", "window": "Editorial handoff", "basis": "Grounded, word-checked drafts"},
+            {"metric": "Gaps needing property facts", "current": str(detail.get("needs_facts_count", 0)), "target": "0 unresolved", "window": "After property-fact confirmation", "basis": "No captured passage supports these questions yet"},
+        ]
+    if agent == "faq_intelligence":
+        return [
+            {"metric": "FAQ coverage", "current": str(detail.get("faq_coverage_score", "Not scored")), "target": "85 or higher", "window": "Next validated rerun", "basis": f"Covered categories out of {detail.get('assessed_category_count', 0)} with observed questions"},
+            {"metric": "Categories needing editorial review", "current": str(detail.get("needs_review_count", 0)), "target": "0 unresolved", "window": "After Answer Optimization drafts", "basis": "Captured but not yet a complete direct answer"},
+            {"metric": "Verified content gaps", "current": str(detail.get("not_covered_count", 0)), "target": "0 unresolved", "window": "After property-fact confirmation", "basis": "Observed question checked against the page with no answer found"},
+        ]
+    if agent == "question_intent":
+        return [
+            {"metric": "High-value answer readiness", "current": str(detail.get("high_value_readiness_score", "Not scored")), "target": "85 or higher", "window": "Next validated rerun", "basis": "Transactional and comparison questions with a captured answer"},
+            {"metric": "Reprioritized high-value gaps", "current": str(detail.get("reprioritized_gap_count", 0)), "target": "0 unresolved", "window": "Before lower-value gaps", "basis": "Missing or partial answers to funnel-critical questions"},
+            {"metric": "Questions classified", "current": str(detail.get("question_count", 0)), "target": "Reassessed after Question Discovery changes", "window": "Next validated rerun", "basis": "Observed and inferred, five-stage funnel taxonomy"},
+        ]
+    # Leading with this agent's own headline measurement stops all eleven
+    # reports from presenting an identical success table.
+    leading = [
+        {
+            "metric": measurements[0]["label"],
+            "current": measurements[0]["value"],
+            "target": "Re-measured on the next validated run",
+            "window": "Next validated rerun",
+            "basis": measurements[0]["note"],
+        }
+    ] if measurements else []
+    return [
+        *leading,
+        {"metric": "Agent score", "current": str(score), "target": "Maintain 85+" if score >= 85 else "85 or higher", "window": "Next validated rerun", "basis": "Project-defined strong band"},
+        {"metric": "Critical findings", "current": str(critical), "target": "0", "window": "After priority fixes", "basis": "Retained findings in this agent"},
+        {"metric": "Verified findings", "current": str(findings), "target": "0 unresolved", "window": "Next review cycle", "basis": "Finding completion checks"},
+    ]
 
 
 def build_agent_reports(
@@ -320,15 +471,57 @@ def build_agent_reports(
         primary = [item for item in related if item["primary_agent"] == agent]
         areas = _score_areas(agent, detail, primary)
         native_score, native_label = _native_score(detail)
+        if agent == "question_discovery":
+            native_score = _number(detail.get("discovery_confidence_score"))
+            native_label = "Discovery confidence from source provenance and observed question evidence"
+        elif agent == "answer_gap":
+            native_score = _number(detail.get("answer_readiness_score"))
+            native_label = "Answer readiness across observed questions with assessable captured evidence"
+            # No assessable observed question is a "nothing to assess" state,
+            # not a failure. Forcing it to 0 read as every answer having
+            # failed, while the breakdown below still showed the default
+            # unreduced areas — the two contradicted each other. Falling
+            # through to the calculated score matches every other
+            # assessment-only agent's "no retained finding" convention.
+        elif agent == "answer_optimization":
+            native_score = _number(detail.get("optimization_coverage_score"))
+            native_label = "Share of draftable gaps that produced a grounded, validated answer"
+        elif agent == "faq_intelligence":
+            native_score = _number(detail.get("faq_coverage_score"))
+            native_label = f"Categories covered out of {detail.get('assessed_category_count', 0)} assessed hospitality FAQ categories"
+        elif agent == "question_intent":
+            native_score = _number(detail.get("high_value_readiness_score"))
+            native_label = "Answer readiness across observed transactional and comparison questions"
         if native_score is not None and agent not in {"ai_visibility", "content_optimizer"}:
             areas = _align_area_average(areas, native_score)
         calculated_score = round(sum(item["score"] for item in areas) / max(1, len(areas)))
         score = native_score if native_score is not None else calculated_score
-        if case.get("output_quality") == "rejected":
-            score = 0
-        elif task.status in {"failed", "needs_review"}:
+        # A rejected output is excluded from the session average and from the
+        # decision queue already. Zeroing it here only contradicted the score
+        # breakdown, which still showed the measured areas.
+        if task.status in {"failed", "needs_review"}:
             score = min(score, 40)
         status = _status(score, case.get("output_quality", "usable"), task.status)
+        if agent == "question_discovery" and score < 70 and case.get("output_quality") != "rejected":
+            status = {"label": "Evidence limited", "tone": "review"}
+        if agent == "answer_gap" and not detail.get("question_count") and case.get("output_quality") != "rejected":
+            status = {"label": "Evidence limited", "tone": "review"}
+        if agent == "answer_optimization" and detail.get("optimization_coverage_score") is None and case.get("output_quality") != "rejected":
+            # Covers both "nothing to draft" and "everything hit a provider
+            # outage or an empty model response" — neither means the score
+            # below (a calculated fallback) reflects a measured result.
+            status = {"label": "Evidence limited", "tone": "review"}
+        if agent == "faq_intelligence" and not detail.get("not_covered_count") and detail.get("no_question_count") and detail.get("assessed_category_count", 0) == 0 and case.get("output_quality") != "rejected":
+            # A low score here can mean "most categories have a confirmed
+            # missing answer" or "most categories never had an observed
+            # question surface at all" — a discovery-coverage limitation, not
+            # a proven content fault. Zero verified gaps means it's the latter.
+            status = {"label": "Evidence limited", "tone": "review"}
+        if agent == "question_intent" and detail.get("high_value_readiness_score") is None and case.get("output_quality") != "rejected":
+            # No observed transactional or comparison question this run means
+            # no assessable high-value demand surfaced, not that this
+            # resort's funnel-critical questions all went unanswered.
+            status = {"label": "Evidence limited", "tone": "review"}
         management = case.get("management", {})
         evidence_ids = list(dict.fromkeys(
             [eid for item in related for eid in item.get("evidence_ids", [])]
@@ -346,28 +539,42 @@ def build_agent_reports(
                 "impact": "High" if item["priority"] in {"critical", "high"} else "Medium" if item["priority"] == "medium" else "Low",
                 "effort": _effort(item),
                 "timeframe": _timeframe(item["priority"]),
+                # The card already shows the action and prints the completion
+                # check under "Done when", so the steps locate and verify the
+                # work instead of restating either of them.
                 "steps": [
+                    f"Open the retained evidence for this finding: {_clip_step(item['observation'])}",
                     item["action"],
-                    item["completion_criteria"],
                     "Rerun this agent on the same URL and compare the saved result.",
                 ],
                 "done_when": item["completion_criteria"],
             })
-        if not action_items:
+        if not action_items and agent not in {"question_discovery", "answer_gap"}:
             for index, action in enumerate(management.get("recommended_actions", [])[:3]):
                 action_items.append({
                     "finding_id": None,
                     "title": action,
                     "action": action,
-                    "rationale": management.get("why_management_should_care", "Keep the assessment current."),
+                    # This paragraph is already the report's management
+                    # relevance. Printing it under all three actions repeated
+                    # the same answer three times in one section.
+                    "rationale": management.get("why_management_should_care", "Keep the assessment current.") if index == 0 else "",
                     "owner": case["owner"],
                     "priority": "review",
                     "impact": "Review",
                     "effort": "Medium",
                     "timeframe": "Next review",
-                    "steps": [action, "Record the reviewer and supporting evidence.", "Rerun this agent if the page changes."],
-                    "done_when": management.get("limitation") or "The recommendation has been reviewed and recorded.",
+                    # The action is already this card's heading. Steps add the
+                    # review path instead of repeating it, and the completion
+                    # check is a real decision gate rather than the scope
+                    # limitation, which now belongs in the limitations block.
+                    "steps": [
+                        f"Review the observations {case['agent_label']} retained for this resort page.",
+                        "Record the decision, the reviewer and the date against this result.",
+                    ],
+                    "done_when": f"{case['owner']} has recorded an accept, revise or reject decision and a rerun of {case['agent_label']} reflects it.",
                 })
+        measurements = _measurements(agent, detail, capture, primary)
         benchmarks = []
         for eid in evidence_ids:
             item = evidence.get(eid, {})
@@ -379,6 +586,8 @@ def build_agent_reports(
                     "basis": "Captured evidence compared with the stated decision rule.",
                     "evidence_id": eid,
                 })
+        if agent == "question_discovery":
+            benchmarks = []
         fix_items = [{
             "evidence_id": eid,
             "title": evidence[eid].get("fix_label") or evidence[eid].get("title") or "Suggested change",
@@ -403,27 +612,43 @@ def build_agent_reports(
             "finding_count": len(primary),
             "executive_summary": management.get("issue_identified") or "The agent completed its configured assessment.",
             "management_relevance": management.get("why_management_should_care") or "Review the captured result in its stated scope.",
-            "measurements": _measurements(agent, detail, capture, primary),
+            "measurements": measurements,
             "finding_ids": [item["id"] for item in primary],
             "evidence_ids": evidence_ids,
             "benchmarks": benchmarks,
             "action_plan": action_items,
             "fixes": fix_items,
-            "success_metrics": [
-                {"metric": "Agent score", "current": str(score), "target": "85 or higher", "window": "Next validated rerun", "basis": "Project-defined strong band"},
-                {"metric": "Critical findings", "current": str(critical), "target": "0", "window": "After priority fixes", "basis": "Retained findings in this agent"},
-                {"metric": "Verified findings", "current": str(len(primary)), "target": "0 unresolved", "window": "Next review cycle", "basis": "Finding completion checks"},
-            ],
+            "success_metrics": _success_metrics(agent, detail, score, critical, len(primary), measurements),
             "trace": [
                 {"step": "Page capture", "status": run.tasks["capture"].status, "reference": run.id, "detail": capture.get("method") or "Shared captured evidence", "at": capture.get("captured_at") or run.created_at},
                 {"step": case["agent_label"], "status": task.status, "reference": task.run_id or run.id, "detail": f"{len(evidence_ids)} retained evidence record(s)", "at": task.finished_at or run.updated_at},
             ],
             "method": METHODS[agent],
-            "limitations": case.get("limitations", []),
+            "limitations": case.get("limitations") or ([management["limitation"]] if management.get("limitation") else []),
             "output_quality": case.get("output_quality", "usable"),
+            "question_landscape": detail.get("questions", []) if agent == "question_discovery" else [],
+            "question_clusters": detail.get("clusters", []) if agent == "question_discovery" else [],
+            "discovery_confidence_score": detail.get("discovery_confidence_score") if agent == "question_discovery" else None,
+            "score_kind": "evidence_confidence" if agent == "question_discovery" else "readiness",
+            "evidence_quality": detail.get("evidence_quality") if agent == "question_discovery" else None,
+            "source_ledger": detail.get("source_ledger", []) if agent == "question_discovery" else [],
+            "answer_gap_candidate_ids": detail.get("answer_gap_candidate_ids", []) if agent == "question_discovery" else [],
+            "recommended_agent_handoffs": detail.get("recommended_agent_handoffs", []) if agent in {"question_discovery", "answer_gap"} else [],
+            "answer_coverage": detail.get("assessments", []) if agent == "answer_gap" else [],
+            "assessment_confidence_score": detail.get("assessment_confidence_score") if agent == "answer_gap" else None,
+            "optimized_answers": detail.get("optimized_answers", []) if agent == "answer_optimization" else [],
+            "optimization_coverage_score": detail.get("optimization_coverage_score") if agent == "answer_optimization" else None,
+            "faq_entries": detail.get("faq_entries", []) if agent == "faq_intelligence" else [],
+            "faq_coverage_score": detail.get("faq_coverage_score") if agent == "faq_intelligence" else None,
+            "intent_distribution": detail.get("distribution", []) if agent == "question_intent" else [],
+            "reprioritized_gaps": detail.get("reprioritized_gaps", []) if agent == "question_intent" else [],
+            "content_strategy": detail.get("content_strategy", []) if agent == "question_intent" else [],
+            "high_value_readiness_score": detail.get("high_value_readiness_score") if agent == "question_intent" else None,
         }
 
-    scored = [item["score"] for item in reports.values() if item["output_quality"] != "rejected"]
+    readiness_scores = [item["score"] for item in reports.values() if item["output_quality"] != "rejected" and item.get("score_kind") == "readiness"]
+    evidence_scores = [item["score"] for item in reports.values() if item["output_quality"] != "rejected" and item.get("score_kind") == "evidence_confidence"]
+    scored = readiness_scores or evidence_scores
     session_score = round(sum(scored) / len(scored)) if scored else 0
     session = {
         "score": session_score,
@@ -431,7 +656,7 @@ def build_agent_reports(
         "agent_count": len(reports),
         "finding_count": len(findings),
         "critical_count": sum(item.get("priority") == "critical" for item in findings),
-        "score_basis": "Equal-weight average of participating agent scores. Each agent exposes its own scoring basis and assessed areas.",
+        "score_basis": ("Equal-weight average of participating readiness scores; planning-agent evidence confidence is shown separately." if readiness_scores else "No readiness specialist participated; this value reflects planning-agent evidence confidence only."),
     }
     return reports, session
 
@@ -452,7 +677,9 @@ def build_session_intelligence(
         members = grouped.get(engine, [])
         if not members:
             continue
-        score = round(sum(item["score"] for item in members) / len(members))
+        readiness_members = [item for item in members if item.get("score_kind") == "readiness"]
+        scored_members = readiness_members or members
+        score = round(sum(item["score"] for item in scored_members) / len(scored_members))
         engine_scores[engine] = score
         weakest = min(members, key=lambda item: item["score"])
         strongest = max(members, key=lambda item: item["score"])
@@ -468,6 +695,7 @@ def build_session_intelligence(
             "weakest_agent_label": weakest["agent_label"],
             "strongest_agent": strongest["agent"],
             "strongest_agent_label": strongest["agent_label"],
+            "score_kind": "readiness" if readiness_members else "evidence_confidence",
         })
 
     finding_by_id = {item["id"]: item for item in findings}
@@ -478,19 +706,29 @@ def build_session_intelligence(
         engine = AGENT_ENGINES.get(report["agent"], "SEO")
         for action in report.get("action_plan", []):
             raw_actions.append((report, engine, action, finding_by_id.get(action.get("finding_id"))))
-    with_findings = [item for item in raw_actions if item[2].get("finding_id")]
-    candidates = with_findings if with_findings else raw_actions
+    # Assessment and monitoring guidance belongs in the source report. The
+    # intelligence queue contains implementation work backed by a retained
+    # finding only, otherwise one sentence is repeated across every section.
+    candidates = [item for item in raw_actions if item[2].get("finding_id")]
 
     severity_points = {"critical": 45, "high": 36, "medium": 24, "low": 12, "review": 8}
     impact_points = {"High": 24, "Medium": 16, "Low": 8, "Review": 5}
     effort_points = {"Low": 16, "Medium": 10, "High": 4}
     priorities = []
     seen = set()
+    seen_text = set()
     for report, engine, action, finding in candidates:
         key = action.get("finding_id") or (report["agent"], action.get("action"))
         if key in seen:
             continue
+        # Two agents can retain separate findings that resolve to the same
+        # sentence. Deduplicating on the finding id alone let that sentence
+        # appear several times in one decision queue.
+        text = " ".join(str(action.get("action") or "").split()).casefold()
+        if text and text in seen_text:
+            continue
         seen.add(key)
+        seen_text.add(text)
         severity = action.get("priority", "review")
         impact = action.get("impact", "Review")
         effort = action.get("effort", "Medium")
@@ -533,6 +771,10 @@ def build_session_intelligence(
     missing = [engine for engine in ("SEO", "AEO", "GEO") if engine not in grouped]
     weakest_engine = min(engines, key=lambda item: item["score"]) if engines else None
     top = priorities[0] if priorities else None
+    handoffs = []
+    for report in reports.values():
+        for handoff in report.get("recommended_agent_handoffs", []):
+            handoffs.append({**handoff, "source_agent": report["agent"], "source_agent_label": report["agent_label"], "engine": AGENT_ENGINES.get(report["agent"], "SEO")})
     return {
         "engine_scores": engines,
         "missing_engines": missing,
@@ -545,5 +787,6 @@ def build_session_intelligence(
         "quick_win_ids": [item["id"] for item in priorities if item["effort"] == "Low"][:3],
         "risk_ids": [item["id"] for item in priorities if item["priority"] in {"critical", "high"}][:4],
         "delivery": delivery,
+        "recommended_agent_handoffs": handoffs,
         "method": "Priorities are calculated from retained severity, stated impact, estimated effort and the participating engine score. Every item links to its source agent and completion check.",
     }

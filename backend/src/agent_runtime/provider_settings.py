@@ -11,7 +11,8 @@ from agent_runtime.postgres import PostgresRepository
 ProviderName = Literal["groq"]
 PROVIDERS: tuple[ProviderName, ...] = ("groq",)
 SUPPORTED_GROQ_MODELS = {
-    "qwen/qwen3.6-27b": ("Qwen 3.6 27B", "preview"),
+    # qwen/qwen3.6-27b was retired by Groq (404 model_not_found) and is
+    # deliberately absent here so it can never be selected again.
     "qwen/qwen3.8-27b": ("Qwen 3.8 27B", "preview"),
     "openai/gpt-oss-120b": ("GPT-OSS 120B", "production"),
     "openai/gpt-oss-20b": ("GPT-OSS 20B", "production"),

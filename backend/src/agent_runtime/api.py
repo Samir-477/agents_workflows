@@ -23,6 +23,7 @@ from local_seo.generation import LocalGenerator
 from local_seo.storage import LocalRepository, MemoryLocalRepository
 from ai_visibility.api import create_visibility_router
 from ai_visibility.storage import MemoryVisibilityRepository, VisibilityRepository
+from answer_optimization.generation import AnswerOptimizer
 from content_brief.api import create_content_brief_router
 from content_brief.generation import ContentBriefGenerator
 from content_brief.storage import ContentBriefRepository, MemoryContentBriefRepository
@@ -73,6 +74,7 @@ def create_app(
     serp_crawler=None,
     content_optimizer_repository=None,
     content_optimizer_crawler=None,
+    answer_optimizer: AnswerOptimizer | None = None,
     diagnosis_repository=None,
 ) -> FastAPI:
     """Compose independently implemented agents into one deployable API."""
@@ -146,6 +148,11 @@ def create_app(
         provider_repository.resolve_api_key,
         provider_repository.resolve_model,
     )
+    answer_optimizer = answer_optimizer or AnswerOptimizer(
+        settings,
+        provider_repository.resolve_api_key,
+        provider_repository.resolve_model,
+    )
     app = create_seo_app(
         settings,
         audit_repository,
@@ -172,6 +179,7 @@ def create_app(
         local_repository=local_repository,
         local_generator=local_generator,
         content_optimizer_repository=content_optimizer_repository,
+        answer_optimizer=answer_optimizer,
     )
     original_lifespan = app.router.lifespan_context
     diagnosis_repository = diagnosis_repository or (DiagnosisRepository(settings.database_url) if settings.database_url else MemoryDiagnosisRepository())

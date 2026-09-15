@@ -16,18 +16,69 @@ from serp_competitor.models import SerpRequest
 from serp_competitor.workflow import run_serp_analysis
 from content_brief.models import ContentBriefCreate
 from content_brief.workflow import build_content_brief_graph
+from question_discovery.analysis import discover_questions
+from answer_gap.analysis import analyze_answer_gaps
+from answer_optimization.analysis import optimize_answers
+from faq_intelligence.analysis import audit_faq_coverage
+from question_intent.analysis import classify_intent
+from aeo_shared import validate_aeo_result
+from serp_competitor.client import SerperClient, SerperError
 
 
 TERMINAL = {"complete", "failed", "needs_review"}
 DEPS = {key: {"capture"} for key in AGENTS}
-DEPS.update(keyword_cluster={"capture", "serp_competitor"}, content_brief={"capture", "serp_competitor", "keyword_cluster"}, content_optimizer={"capture", "serp_competitor", "content_brief"}, report=set(AGENTS), capture=set())
-MODEL_TASKS = {"internal_linking", "keyword_cluster", "metadata", "schema_markup", "content_brief", "local_seo", "report"}
+DEPS.update(keyword_cluster={"capture", "serp_competitor"}, content_brief={"capture", "serp_competitor", "keyword_cluster"}, content_optimizer={"capture", "serp_competitor", "content_brief"}, answer_gap={"capture", "question_discovery"}, answer_optimization={"capture", "question_discovery", "answer_gap"}, faq_intelligence={"capture", "question_discovery", "answer_gap"}, question_intent={"capture", "question_discovery", "answer_gap"}, report=set(AGENTS), capture=set())
+MODEL_TASKS = {"internal_linking", "keyword_cluster", "metadata", "schema_markup", "content_brief", "local_seo", "answer_optimization", "report"}
 
 
 def required_tasks(run, key):
     if key == "report":
         return set(run.tasks) & set(AGENTS)
-    return DEPS[key] & set(run.tasks)
+    dependencies = DEPS[key] & set(run.tasks)
+    if key == "question_discovery" and "serp_competitor" in run.tasks:
+        dependencies.add("serp_competitor")
+    if key in {"answer_gap", "answer_optimization", "faq_intelligence", "question_intent"} and run.request.run_mode == "individual":
+        # A standalone run re-derives its own upstream steps instead of
+        # depending on tasks that were never selected into the plan.
+        dependencies -= {"question_discovery", "answer_gap"}
+    return dependencies
+
+
+async def _fetch_question_sample(selected, run, keyword):
+    """Best-effort standalone Google question fetch shared by every AEO agent
+    that can run without its connected upstream task. Question Discovery
+    needs the question feature only, so this stays a small, targeted lookup
+    rather than a full competitor-page fetch."""
+    from types import SimpleNamespace
+    client = SerperClient(selected.settings.serper_api_key)
+    queries = list(dict.fromkeys([
+        keyword,
+        f"{keyword} rooms amenities",
+        f"{keyword} booking cancellation",
+        f"{keyword} reviews family stay",
+    ]))
+    questions, related, answer_box, observed_at, failures = [], [], None, None, []
+    question_queries: dict[str, list[str]] = {}
+    for query in queries:
+        try:
+            _, found_questions, found_related, found_box, captured_at = await client.search(
+                SerpRequest(target_keyword=query, country=run.request.country, language=run.request.language, inspect_limit=0)
+            )
+            observed_at = captured_at
+            answer_box = answer_box or found_box
+            for item in found_questions:
+                normalized = " ".join(item.question.casefold().split())
+                question_queries.setdefault(normalized, []).append(query)
+                if not any(" ".join(existing.question.casefold().split()) == normalized for existing in questions):
+                    questions.append(item)
+            related.extend(item for item in found_related if item not in related)
+        except SerperError as exc:
+            failures.append(f"{query}: {exc}")
+    if not questions and not related:
+        return None, "; ".join(failures) or "No usable Google question evidence was returned."
+    warning = f"{len(failures)} of {len(queries)} question queries failed; successful samples were retained." if failures else None
+    return SimpleNamespace(questions=questions, related_searches=related, answer_box=answer_box,
+                           observed_at=observed_at, queries=queries, question_queries=question_queries), warning
 
 
 def claim(repository, id):
@@ -110,7 +161,7 @@ def task_dependencies(deps, run, key, repository, token):
             llm_api_key=generator.api_key_resolver(settings.llm_provider, settings.llm_api_key) if generator.api_key_resolver else settings.llm_api_key,
             llm_model=generator.model_resolver(settings.llm_model) if generator.model_resolver else settings.llm_model)
     result.settings = replace(settings, crawl_timeout_seconds=75)
-    for attr in ["metadata_generator", "schema_interpreter", "keyword_cluster_generator", "internal_link_refiner", "content_brief_generator", "local_generator"]:
+    for attr in ["metadata_generator", "schema_interpreter", "keyword_cluster_generator", "internal_link_refiner", "content_brief_generator", "local_generator", "answer_optimizer"]:
         setattr(result, attr, type(getattr(deps, attr))(result.settings))
     # The final management report owns narration; don't spend another model call here.
     result.report_writer = ReportWriter(replace(result.settings, llm_provider=None, write_report_files=False))
@@ -165,6 +216,68 @@ async def execute(deps, repository, run, key, token):
     keyword = derive_research_query(run.tasks["capture"].result, url)
     research_task = run.tasks.get("serp_competitor")
     research = deps.serp_repository.get(research_task.run_id).result if research_task and research_task.status == "complete" and research_task.run_id else None
+    if key == "question_discovery":
+        warning = None
+        if research is None and research_task is None:
+            research, warning = await _fetch_question_sample(selected, run, keyword)
+        elif research is None and research_task is not None:
+            warning = research_task.error or "The shared SERP task did not return usable question evidence."
+        result = discover_questions(run.tasks["capture"].result, url, research, run.request.language)
+        if warning:
+            result["detail"]["limitations"].append("Live Google question enrichment was unavailable for this run; the saved page evidence and clearly labelled resort-question framework were retained.")
+        return validate_aeo_result(key, result)
+    if key in {"answer_gap", "answer_optimization", "faq_intelligence"}:
+        discovery_task = run.tasks.get("question_discovery")
+        gap_task = run.tasks.get("answer_gap")
+        # Answer Optimization only needs the gap result, not the raw question
+        # list, so skip re-deriving discovery when a completed gap result is
+        # already available. FAQ Intelligence classifies every discovered
+        # question into its taxonomy, so it always needs the full list.
+        need_discovery = key in {"answer_gap", "faq_intelligence"} or not (gap_task and gap_task.status == "complete")
+        if need_discovery:
+            warning = None
+            if discovery_task and discovery_task.status == "complete":
+                discovery = discovery_task.result
+            else:
+                # Standalone mode keeps every agent in this family independently
+                # runnable while preserving the same upstream contract connected runs use.
+                if research is None:
+                    research, warning = await _fetch_question_sample(selected, run, keyword)
+                discovery = discover_questions(run.tasks["capture"].result, url, research, run.request.language)
+                if warning:
+                    discovery["detail"]["limitations"].append("Google question enrichment was incomplete: " + warning)
+        if key in {"answer_optimization", "faq_intelligence"} and gap_task and gap_task.status == "complete":
+            gap_result = gap_task.result
+        else:
+            gap_result = analyze_answer_gaps(run.tasks["capture"].result, discovery, url)
+        if key == "answer_gap":
+            return validate_aeo_result(key, gap_result)
+        if key == "answer_optimization":
+            return validate_aeo_result(key, await optimize_answers(gap_result, url, selected.answer_optimizer))
+        # FAQ Intelligence never triggers its own drafting call: reuse an
+        # Answer Optimization result only when one already ran in this same
+        # session, so this stays a lean, deterministic audit rather than
+        # depending on an LLM budget slot for no core-audit benefit.
+        optimization_task = run.tasks.get("answer_optimization")
+        optimization_result = optimization_task.result if optimization_task and optimization_task.status == "complete" else None
+        return validate_aeo_result(key, audit_faq_coverage(discovery, gap_result, optimization_result, url))
+    if key == "question_intent":
+        discovery_task = run.tasks.get("question_discovery")
+        if discovery_task and discovery_task.status == "complete":
+            discovery = discovery_task.result
+            gap_task = run.tasks.get("answer_gap")
+            gap_result = gap_task.result if gap_task and gap_task.status == "complete" else None
+        else:
+            # Both upstream steps are deterministic and cheap, so a standalone
+            # run self-derives both for the fuller, gap-aware analysis.
+            warning = None
+            if research is None:
+                research, warning = await _fetch_question_sample(selected, run, keyword)
+            discovery = discover_questions(run.tasks["capture"].result, url, research, run.request.language)
+            if warning:
+                discovery["detail"]["limitations"].append("Google question enrichment was incomplete: " + warning)
+            gap_result = analyze_answer_gaps(run.tasks["capture"].result, discovery, url)
+        return validate_aeo_result(key, classify_intent(discovery, gap_result, url))
     if key == "local_seo":
         phones = list(dict.fromkeys(__import__("re").findall(r"(?:\+?\d[\d\s().-]{7,}\d)", primary.get("main_text", ""))))[:10]
         return {"status": "complete", "detail": {

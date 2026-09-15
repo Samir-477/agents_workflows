@@ -163,12 +163,12 @@ async def test_all_agents_are_attempted_failure_isolated_and_report_saved(monkey
         if key == "report": return assemble_report(current)
         return {"status": "complete", "detail": {}}
     monkeypatch.setattr(engine, "execute", execute)
-    for _ in range(12):
+    for _ in range(len(AGENTS) + 2):
         await engine.process_one(None, repo, run.id)
     result = repo.get(run.id)
     assert set(AGENTS) <= set(calls)
     assert result.status == "partial"
-    assert len(result.report["cases"]) == 10
+    assert len(result.report["cases"]) == len(AGENTS)
     assert "secret" not in result.tasks["metadata"].error
 
 
@@ -245,8 +245,8 @@ def report_fixture():
 
 def test_report_deduplicates_schema_and_excludes_unrelated_resort():
     report = report_fixture()
-    assert report["version"] == 7
-    assert report["session_score"]["agent_count"] == 10
+    assert report["version"] == 8
+    assert report["session_score"]["agent_count"] == len(AGENTS)
     schema_findings = [item for item in report["findings"] if item["title"] == "Malformed structured information"]
     intelligence = report["session_intelligence"]
     assert [item["engine"] for item in intelligence["engine_scores"]] == ["SEO", "AEO", "GEO"]
@@ -269,7 +269,7 @@ def test_report_deduplicates_schema_and_excludes_unrelated_resort():
     assert len(schema_findings) == 1
     assert schema_findings[0]["supporting_agents"] == ["schema_markup"]
     assert "Unrelated property fault" not in str(report)
-    assert len(report["cases"]) == 10
+    assert len(report["cases"]) == len(AGENTS)
     assert "Suggested title" not in str(report["findings"])
     for f in report["findings"]:
         assert all(e in report["evidence"] for e in f["evidence_ids"])
@@ -450,7 +450,7 @@ def test_api_refreshes_an_existing_report_from_saved_agent_results():
         client.cookies.set("stellar_demo_session", "stellar-admin")
         response = client.post(f"/api/diagnoses/{run.id}/refresh-report")
         assert response.status_code == 200
-        assert response.json()["report"]["version"] == 7
+        assert response.json()["report"]["version"] == 8
 
 
 def test_api_starts_combined_diagnosis_from_url_only():
@@ -601,15 +601,91 @@ async def test_real_agent_workflows_share_evidence_and_persist_child_results(mon
         r.tasks["capture"].status = "complete"
         r.tasks["capture"].result = data
     repo.mutate(run.id, captured)
-    for _ in range(11):
+    for _ in range(len(AGENTS) + 1):
         await engine.process_one(app.state.diagnosis_dependencies, repo, run.id)
     result = repo.get(run.id)
     assert all(t.status in engine.TERMINAL for t in result.tasks.values())
     assert result.report is not None
-    assert len(result.report["cases"]) == 10
+    assert len(result.report["cases"]) == len(AGENTS)
     assert all(result.tasks[key].status == "complete" for key in AGENTS)
     assert result.tasks["local_seo"].result["detail"]["mode"] == "url_assessment"
-    for key in set(AGENTS) - {"local_seo", "metadata", "keyword_cluster"}:
+    for key in set(AGENTS) - {"local_seo", "metadata", "keyword_cluster", "question_discovery", "answer_gap", "answer_optimization", "faq_intelligence", "question_intent"}:
         assert result.tasks[key].status == "complete", (key, result.tasks[key].error)
         assert result.tasks[key].run_id
         assert result.tasks[key].result["detail"]
+
+
+def test_execution_steps_do_not_restate_the_action_or_the_completion_check():
+    report = report_fixture()
+    for agent, result in report["agent_reports"].items():
+        for item in result["action_plan"]:
+            # "Done when" is printed under the step list, and the action is the
+            # card heading, so neither may be repeated inside the steps.
+            assert item["done_when"] not in item["steps"], agent
+            if item["finding_id"] is None:
+                assert item["action"] not in item["steps"], agent
+
+
+def test_assessment_actions_complete_on_a_decision_not_on_a_scope_limitation():
+    report = report_fixture()
+    for case in report["cases"]:
+        limitation = case["management"].get("limitation")
+        result = report["agent_reports"][case["agent"]]
+        for item in result["action_plan"]:
+            if item["finding_id"] is None:
+                assert item["done_when"] != limitation, case["agent"]
+                assert "decision" in item["done_when"]
+
+
+def test_every_agent_report_states_its_limitations():
+    report = report_fixture()
+    for agent, result in report["agent_reports"].items():
+        assert result["limitations"], agent
+
+
+def test_success_metrics_lead_with_each_agent_own_measurement():
+    report = report_fixture()
+    leading = set()
+    for agent, result in report["agent_reports"].items():
+        if agent in {"question_discovery", "answer_gap", "answer_optimization", "faq_intelligence", "question_intent"}:
+            continue  # these five use a bespoke, non-generic metric set
+        # Without this the same three generic rows were the whole success
+        # table for every agent in the session.
+        assert result["success_metrics"][0]["metric"] == result["measurements"][0]["label"], agent
+        leading.add(result["success_metrics"][0]["metric"])
+    assert len(leading) > 1
+
+
+def test_intelligence_queue_never_repeats_the_same_recommendation():
+    repo, run = setup_run()
+    run.tasks["capture"].status = "complete"
+    run.tasks["capture"].result = capture_data()
+    for key in AGENTS: run.tasks[key].status = "complete"
+    # Two distinct faults that resolve to the same sentence. Deduplicating on
+    # the finding id alone printed that sentence twice in one decision queue.
+    shared = "Correct and validate the block."
+    run.tasks["seo_audit"].result = {"detail": {"findings": [
+        {"rule_id": "invalid_json_ld", "title": "Malformed structured information", "evidence": "Block 2: invalid control character", "why_it_matters": "Search systems cannot read the affected information.", "recommendation": shared, "severity": "important", "affected_urls": [URL]},
+        {"rule_id": "error_status", "title": "Second fault on this resort page", "evidence": "Observed problem", "why_it_matters": "Customers reach a page that does not resolve.", "recommendation": shared, "severity": "critical", "affected_urls": [URL]},
+    ]}}
+    report = assemble_report(run)
+    titles = {item["title"] for item in report["findings"]}
+    assert {"Malformed structured information", "Second fault on this resort page"} <= titles
+    actions = [item["action"] for item in report["session_intelligence"]["priorities"]]
+    assert actions.count(shared) == 1
+    assert len(actions) == len(set(actions))
+
+
+def test_assessment_rationale_is_stated_once_per_agent():
+    report = report_fixture()
+    for agent, result in report["agent_reports"].items():
+        # The management relevance already heads the report; repeating it under
+        # every review action printed the same paragraph two or three times.
+        stated = [item["rationale"] for item in result["action_plan"] if item["finding_id"] is None and item["rationale"]]
+        assert len(stated) <= 1, agent
+
+
+def test_no_agent_falls_back_to_the_shared_generic_assessment_copy():
+    report = report_fixture()
+    generic = "The agent completed its checks without establishing a verified website fault for this resort page."
+    assert [case["agent"] for case in report["cases"] if case["management"]["issue_identified"] == generic] == []

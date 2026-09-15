@@ -119,7 +119,7 @@ def create_router(repository, deps):
     @router.post("/{id}/upgrade")
     def upgrade_run(id: str, subject: str = Depends(require_access)):
         current = get(id, subject)
-        if current.report and current.report.get("version", 0) >= 6:
+        if current.report and current.report.get("version", 0) >= 8:
             raise HTTPException(409, "This diagnosis already uses the current evidence contract.")
         try:
             return public(rerun_all(repository, id))

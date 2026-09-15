@@ -150,6 +150,34 @@ def build_pdf(report):
                                ("VALIGN", (0,0), (-1,-1), "TOP"), ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#F6F5F9")]),
                                ("LEFTPADDING", (0,0), (-1,-1), 6), ("RIGHTPADDING", (0,0), (-1,-1), 6)]))
     story.append(table)
+    question_reports = [
+        item for item in report.get("agent_reports", {}).values()
+        if item.get("agent") == "question_discovery" and item.get("question_landscape")
+    ]
+    for agent_report in question_reports:
+        p("Question landscape", "Heading1")
+        p("Observed evidence and inferred planning hypotheses are kept separate. Coverage describes the captured page text; it does not measure answer quality or search demand.")
+        question_rows = [[
+            Paragraph("Question", styles["TableHead"]), Paragraph("Intent", styles["TableHead"]),
+            Paragraph("Coverage", styles["TableHead"]), Paragraph("Evidence", styles["TableHead"]),
+        ]]
+        for item in agent_report["question_landscape"][:40]:
+            question_rows.append([
+                Paragraph(escape(str(item.get("question", ""))), styles["Copy"]),
+                Paragraph(escape(str(item.get("intent", "unknown")).title()), styles["Copy"]),
+                Paragraph(escape(str(item.get("page_coverage", "unknown")).title()), styles["Copy"]),
+                Paragraph(escape(str(item.get("evidence_status", "unknown")).title()), styles["Copy"]),
+            ])
+        question_table = LongTable(question_rows, colWidths=[92*mm, 28*mm, 28*mm, 25*mm], repeatRows=1)
+        question_table.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#087849")),
+            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+            ("GRID", (0,0), (-1,-1), .35, colors.HexColor("#DADFDc")),
+            ("VALIGN", (0,0), (-1,-1), "TOP"),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#F3F8F5")]),
+            ("LEFTPADDING", (0,0), (-1,-1), 6), ("RIGHTPADDING", (0,0), (-1,-1), 6),
+        ]))
+        story.append(question_table)
     p("Limitations", "Heading1")
     for item in report["limitations"]:
         p(item)

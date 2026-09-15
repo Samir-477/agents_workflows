@@ -13,6 +13,7 @@ __pycache__/
 # Local report artifacts
 /reports/
 /backend/reports/
+/output/
 /sterling_resort_crawler/
 
 # Next.js
@@ -26,6 +27,7 @@ tsconfig.tsbuildinfo
 
 # Package-manager and debug artifacts
 .backend-dev.*.log
+.backend-perf.*.log
 .frontend-dev.*.log
 .pnp
 .pnp.*

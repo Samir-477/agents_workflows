@@ -63,7 +63,7 @@ requests use `/api/agents/meta-title-description`. Both are served from the same
 FastAPI/Vercel deployment, so do not set `NEXT_PUBLIC_API_URL` in Vercel.
 
 Resort-wide management reviews are available at `/diagnosis` and use
-`/api/diagnoses`. A run may include one, several, or all ten active specialists;
+`/api/diagnoses`. A run may include one, several, or all fifteen active specialists;
 required research dependencies are selected automatically. The page advances
 short persisted tasks and can safely resume after interruption. For continuous
 processing outside the browser, run:

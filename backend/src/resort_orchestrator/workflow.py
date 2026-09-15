@@ -16,6 +16,7 @@ from typing import Any
 from ai_visibility.models import VisibilityCreate
 from ai_visibility.storage import VisibilityRepository
 from ai_visibility.workflow import run_visibility_audit
+from answer_optimization.generation import AnswerOptimizer
 from content_brief.generation import ContentBriefGenerator
 from content_brief.models import ContentBriefCreate
 from content_brief.storage import ContentBriefRepository
@@ -83,6 +84,7 @@ class Dependencies:
         content_brief_repository: ContentBriefRepository, content_brief_generator: ContentBriefGenerator,
         local_repository: LocalRepository, local_generator: LocalGenerator,
         content_optimizer_repository: ContentOptimizerRepository,
+        answer_optimizer: AnswerOptimizer,
     ) -> None:
         self.settings = settings
         self.crawler = crawler
@@ -103,6 +105,7 @@ class Dependencies:
         self.local_repository = local_repository
         self.local_generator = local_generator
         self.content_optimizer_repository = content_optimizer_repository
+        self.answer_optimizer = answer_optimizer
 
 
 async def _safe(agent: str, coro) -> AgentOutcome:

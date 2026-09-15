@@ -245,7 +245,7 @@ require a separate measurement path and evaluation.
 
 Evaluation must include both automated regression fixtures and the mentor's
 50-100 page benchmark across 5-10 websites with genuine human-verified labels.
-The current 90 passing backend tests establish a software baseline, not measured
+The automated backend regression suite establishes a software baseline, not measured
 SEO recommendation quality. Backlinks, rank monitoring and the other proposed
 future agents remain deferred. This is our product decision, not evidence of
 Dual7's internal architecture.
@@ -255,8 +255,8 @@ Dual7's internal architecture.
 ### Resort Website Diagnosis (2026-09-09)
 
 Website Diagnosis is a top-level product workflow at `/diagnosis`; it is not an
-eleventh agent. One resort URL starts a durable case. From New run, the user can
-run one, several, or all ten active specialists. Required upstream research agents
+agent. One resort URL starts a durable case. From New run, the user can
+run one, several, or all fifteen active specialists. Required upstream research agents
 are added automatically when a dependent content agent is selected there. The resort
 identity used for search research is derived from the captured H1 or title, with
 the URL slug as a deterministic fallback. A single bounded capture is saved and
@@ -361,7 +361,7 @@ fallback. The PDF is generated from the same findings and omits duplicated actio
 sections.
 
 Legacy reports below version 4 are visibly blocked from management use. Their
-upgrade action starts a fresh capture and reruns all ten agents rather than
+upgrade action starts a fresh capture and reruns all selected agents rather than
 rewriting old conclusions. Resort identity requires corroboration between the
 URL and schema, title or H1. A conflicting LodgingBusiness name is rejected as
 an identity source and becomes its own direct structured-data finding.
@@ -380,9 +380,9 @@ cookie is accepted only by the local development/test compatibility path.
 The application shell uses a restrained Stellar Agents command-centre design:
 a split sign-in page, a persistent Agents/New run/Sessions navigation bar, a
 three-engine agent directory, and a dedicated New run screen. The directory
-groups 26 catalog capabilities into SEO, AEO and GEO, with search and engine
-filters. Ten entries map to implemented, runnable diagnosis workflows; the
-remaining sixteen are explicitly labelled Planned and must not imply working
+groups 24 catalog capabilities into SEO, AEO and GEO, with search and engine
+filters. Fifteen entries map to implemented, runnable diagnosis workflows; the
+remaining nine are explicitly labelled Planned and must not imply working
 pipelines or measured results. Card copy describes capability and expected
 output rather than fabricated customer findings. New run accepts a URL, groups
 the ten active diagnosis specialists under their engine, and submits the
@@ -400,7 +400,7 @@ management-report orchestration task. A compact deterministic report presents th
 single agent's saved evidence after it finishes. Combined dependency expansion
 remains exclusive to New run. Individual and combined reports may both use the
 bounded editorial model pass after deterministic facts are assembled.
-Individual result screens use one evidence-aware structure across all ten agents:
+Individual result screens use one evidence-aware structure across all active agents:
 Executive summary, Measurements, Findings, Evidence, Benchmark, Action plan,
 Fix it, Do it, Measure it, Trace and Method. The sections adapt to saved output;
 missing comparison data or code examples are disclosed instead of fabricated.
@@ -461,6 +461,98 @@ invent category-leader, rival, median, impression or target values. The optional
 model call may simplify executive and management wording inside the validated
 report contract, but cannot create or change scores, measurements, findings,
 evidence, benchmarks or completion rules.
+
+### Question Discovery Agent (2026-09-13)
+
+`question_discovery` is the first dedicated AEO discovery specialist. It accepts
+the same resort URL as the diagnosis workflow and runs either by itself or as a
+selected member of a combined session. Both modes reuse the shared captured-page
+contract. In a combined run it waits for and reuses the saved SERP sample when
+the SERP specialist participates; otherwise it performs four bounded query-family
+lookups covering brand, amenities, booking policy and travel/review needs. Query
+provenance and partial lookup failures remain visible. Provider failure does not
+block the report.
+
+The agent consolidates question headings observed on captured pages, People Also
+Ask and interrogative related searches from the dated Google sample when available,
+and a fixed resort question framework. Conservative subject-token clustering merges
+branded and unbranded variants while retaining their wording and sources. Framework
+questions are always labelled `inferred` and remain a planning backlog; they never
+create page findings or affect observed-question coverage. Each question records
+provenance, confidence, intent, journey stage, topic, a coverage hint, priority and
+separate SEO, AEO and GEO handoffs. Coverage hints do not claim answer completeness,
+which belongs to the Answer Gap Agent, and do not claim live AI demand or visibility.
+
+Report contract version 8 separates readiness from discovery evidence confidence,
+publishes a source ledger and evidence-quality state, and routes observed questions
+to an explicit Answer Gap handoff. Discovery produces no implementation finding;
+the intelligence layer keeps diagnostic handoffs separate from its evidence-backed
+implementation queue. Its question landscape is paginated and keeps observed
+demand visually separate from research hypotheses.
+
+### Answer Gap Agent (2026-09-15)
+
+`answer_gap` is the second dedicated AEO specialist. It is independently runnable
+with `capture + answer_gap`; in that mode it performs bounded Question Discovery
+inside the task and exposes one Answer Gap report. In a combined diagnosis,
+selecting Answer Gap automatically adds `question_discovery`, waits for its saved
+result and preserves its question identifiers. This avoids duplicate visible
+agents in standalone mode while keeping an auditable connected pipeline in suite
+runs.
+
+The deterministic first version scores only observed questions. It retrieves bounded
+section, sentence and adjacent-sentence passages from captured server HTML, then classifies the
+answer as answered, partial, missing or unable to verify. Directness,
+completeness, extractability and factual support are recorded separately. Inferred
+question-framework hypotheses remain outside readiness and findings until approved
+or demand-validated. A partial or missing observed answer becomes a retained
+finding with the question ID, captured passage or explicit missing-passage result,
+verification rule and accountable owner. The agent identifies the information gap
+but does not draft replacement copy; verified gaps are handed to the planned
+Answer Optimization Agent. Question lineage uses a normalized hash that remains
+stable when display rank changes, while the human-facing `Q-xx` identifier follows
+the current priority order.
+
+### Answer Optimization Agent (2026-09-15)
+
+`answer_optimization` consumes verified partial and missing results from Answer Gap.
+Partial gaps with a retained passage may be rewritten into a concise answer; missing
+gaps receive a fact-gathering checklist and are never sent to the drafting provider.
+Every generated draft passes conservative vocabulary, word-order, protected-meaning
+and numeric checks. These checks reject obvious additions and polarity reversals but
+do not establish factual approval, so all accepted drafts remain explicitly subject
+to editorial fact review. Connected runs preserve the originating question lineage;
+standalone runs perform the same bounded discovery and gap stages internally.
+
+### FAQ Intelligence Agent (2026-09-15)
+
+`faq_intelligence` rolls observed question-level verdicts into ten hospitality FAQ
+categories. A category is evaluated against its weakest observed question so one
+answered question cannot hide another verified gap. Categories with no observed
+question are `not_assessed`: they remain visible as scope, stay outside the coverage
+denominator and do not create implementation actions. Retained passages may count as
+covered; generated or extractive drafts require editorial review and are never called
+publish-ready. The agent keeps question lineage and contributes supporting evidence
+to the same connected action rather than creating a duplicate recommendation.
+
+### Question Intent Agent (2026-09-15)
+
+`question_intent` separates journey stage (`Discover`, `Evaluate`, `Plan`, `Book`,
+`Manage`), query intent and topic. Its distribution uses observed questions only;
+inferred framework questions are reported separately as planning hypotheses and are
+not described as measured demand. In connected runs, Question Discovery and Answer
+Gap are required dependencies. Every verified gap remains in the delivery queue and
+is sequenced with a disclosed stage heuristic that does not claim measured conversion
+or revenue impact. Standalone runs perform the bounded upstream stages internally.
+
+### Connected AEO result contract (2026-09-15)
+
+The five implemented question-and-answer specialists cross a runtime-validated result
+boundary before report assembly. Each result must expose its required core collections,
+score field and limitations list. Stable question lineage lets Answer Gap, Answer
+Optimization, FAQ Intelligence and Question Intent contribute to one evidence-linked
+management action. Supporting assessments append their own evidence records while the
+implementation-stage specialist may refine the action and owner.
 
 Decision recorded on 2026-09-05: the seventh persisted workflow is an
 evidence-first AI Visibility Audit Agent. This is our implementation decision,
@@ -549,7 +641,7 @@ private implementation.
   description remains.
 - Copy generation requires a configured Groq or OpenAI model. Unlike the audit
   narrative, it has no deterministic copywriting fallback.
-- The current Groq default is `qwen/qwen3.6-27b` in non-thinking, hidden-reasoning
+- The current Groq default is `qwen/qwen3.8-27b` in non-thinking, hidden-reasoning
   mode. The adapter retains compatible reasoning settings for GPT-OSS models.
   JSON-object mode is used because live tests showed tool-calling and
   provider-side strict schema modes could fail before Pydantic validation.
