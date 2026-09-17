@@ -256,7 +256,7 @@ Dual7's internal architecture.
 
 Website Diagnosis is a top-level product workflow at `/diagnosis`; it is not an
 agent. One resort URL starts a durable case. From New run, the user can
-run one, several, or all fifteen active specialists. Required upstream research agents
+run one, several, or all seventeen active specialists. Required upstream research agents
 are added automatically when a dependent content agent is selected there. The resort
 identity used for search research is derived from the captured H1 or title, with
 the URL slug as a deterministic fallback. A single bounded capture is saved and
@@ -545,14 +545,45 @@ Gap are required dependencies. Every verified gap remains in the delivery queue 
 is sequenced with a disclosed stage heuristic that does not claim measured conversion
 or revenue impact. Standalone runs perform the bounded upstream stages internally.
 
-### Connected AEO result contract (2026-09-15)
+### Answer Structure Agent (updated 2026-09-17)
 
-The five implemented question-and-answer specialists cross a runtime-validated result
+`answer_structure` measures the extractability of passages already retained by
+Answer Gap as answered or partial. Missing answers are excluded because absence is
+an Answer Gap problem, not a formatting defect. For each retained passage the agent
+first maps the passage back to a captured server-HTML block using a confidence-gated
+locator. It withholds the score when that match is unreliable. Located blocks are
+classified by question type and scored once across five disclosed dimensions: direct
+opening 25%, self-containment 25%, heading context 20%, format suitability 15% and
+concision 15%. Interactive or hidden server-HTML states are surfaced as review signals. A
+connected run requires Question Discovery and Answer Gap; a standalone run performs
+those bounded deterministic steps internally. Structure findings keep the stable
+question lineage so they support an existing answer-gap case instead of duplicating
+its implementation task.
+
+### AEO Opportunity Agent (updated 2026-09-17)
+
+`aeo_opportunity` consolidates the implemented AEO evidence chain into one delivery
+queue. It consumes Question Discovery, Answer Gap, Answer Structure, FAQ Intelligence,
+Question Intent and optional Answer Optimization results. Correlated evidence is
+deduplicated by stable question lineage and never receives a score boost merely because
+more agents reported it. Observed work is sequenced into Now, Next, Later or Blocked;
+inferred questions remain in a separate Research queue until demand is validated. Missing
+answers without a retained passage are blocked on approved property facts. Priority uses
+disclosed evidence-confidence, answer-deficiency, journey, obstruction, dependency and
+effort factors. Readiness is withheld when observed evidence is insufficient. It must not
+be described as measured demand, traffic, conversion or revenue impact. Standalone runs
+internally derive the same deterministic upstream results; connected runs reuse the
+visible saved results.
+
+### Connected AEO result contract (2026-09-16)
+
+The seven implemented question-and-answer specialists cross a runtime-validated result
 boundary before report assembly. Each result must expose its required core collections,
 score field and limitations list. Stable question lineage lets Answer Gap, Answer
-Optimization, FAQ Intelligence and Question Intent contribute to one evidence-linked
-management action. Supporting assessments append their own evidence records while the
-implementation-stage specialist may refine the action and owner.
+Optimization, FAQ Intelligence, Question Intent, Answer Structure and AEO Opportunity
+contribute to one evidence-linked management action. Supporting assessments append
+their own evidence records while the implementation-stage specialist may refine the
+action and owner.
 
 Decision recorded on 2026-09-05: the seventh persisted workflow is an
 evidence-first AI Visibility Audit Agent. This is our implementation decision,

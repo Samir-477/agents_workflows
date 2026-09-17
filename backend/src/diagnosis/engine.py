@@ -21,13 +21,15 @@ from answer_gap.analysis import analyze_answer_gaps
 from answer_optimization.analysis import optimize_answers
 from faq_intelligence.analysis import audit_faq_coverage
 from question_intent.analysis import classify_intent
+from answer_structure.analysis import analyze_answer_structure
+from aeo_opportunity.analysis import build_aeo_opportunities
 from aeo_shared import validate_aeo_result
 from serp_competitor.client import SerperClient, SerperError
 
 
 TERMINAL = {"complete", "failed", "needs_review"}
 DEPS = {key: {"capture"} for key in AGENTS}
-DEPS.update(keyword_cluster={"capture", "serp_competitor"}, content_brief={"capture", "serp_competitor", "keyword_cluster"}, content_optimizer={"capture", "serp_competitor", "content_brief"}, answer_gap={"capture", "question_discovery"}, answer_optimization={"capture", "question_discovery", "answer_gap"}, faq_intelligence={"capture", "question_discovery", "answer_gap"}, question_intent={"capture", "question_discovery", "answer_gap"}, report=set(AGENTS), capture=set())
+DEPS.update(keyword_cluster={"capture", "serp_competitor"}, content_brief={"capture", "serp_competitor", "keyword_cluster"}, content_optimizer={"capture", "serp_competitor", "content_brief"}, answer_gap={"capture", "question_discovery"}, answer_optimization={"capture", "question_discovery", "answer_gap"}, faq_intelligence={"capture", "question_discovery", "answer_gap"}, question_intent={"capture", "question_discovery", "answer_gap"}, answer_structure={"capture", "question_discovery", "answer_gap"}, aeo_opportunity={"capture", "question_discovery", "answer_gap", "answer_structure", "faq_intelligence", "question_intent"}, report=set(AGENTS), capture=set())
 MODEL_TASKS = {"internal_linking", "keyword_cluster", "metadata", "schema_markup", "content_brief", "local_seo", "answer_optimization", "report"}
 
 
@@ -37,7 +39,7 @@ def required_tasks(run, key):
     dependencies = DEPS[key] & set(run.tasks)
     if key == "question_discovery" and "serp_competitor" in run.tasks:
         dependencies.add("serp_competitor")
-    if key in {"answer_gap", "answer_optimization", "faq_intelligence", "question_intent"} and run.request.run_mode == "individual":
+    if key in {"answer_gap", "answer_optimization", "faq_intelligence", "question_intent", "answer_structure", "aeo_opportunity"} and run.request.run_mode == "individual":
         # A standalone run re-derives its own upstream steps instead of
         # depending on tasks that were never selected into the plan.
         dependencies -= {"question_discovery", "answer_gap"}
@@ -278,6 +280,42 @@ async def execute(deps, repository, run, key, token):
                 discovery["detail"]["limitations"].append("Google question enrichment was incomplete: " + warning)
             gap_result = analyze_answer_gaps(run.tasks["capture"].result, discovery, url)
         return validate_aeo_result(key, classify_intent(discovery, gap_result, url))
+    if key == "answer_structure":
+        discovery_task = run.tasks.get("question_discovery")
+        gap_task = run.tasks.get("answer_gap")
+        if discovery_task and discovery_task.status == "complete":
+            discovery = discovery_task.result
+        else:
+            warning = None
+            if research is None:
+                research, warning = await _fetch_question_sample(selected, run, keyword)
+            discovery = discover_questions(run.tasks["capture"].result, url, research, run.request.language)
+            if warning:
+                discovery["detail"]["limitations"].append("Google question enrichment was incomplete: " + warning)
+        gap_result = gap_task.result if gap_task and gap_task.status == "complete" else analyze_answer_gaps(run.tasks["capture"].result, discovery, url)
+        return validate_aeo_result(key, analyze_answer_structure(run.tasks["capture"].result, discovery, gap_result, url))
+    if key == "aeo_opportunity":
+        discovery_task = run.tasks.get("question_discovery")
+        gap_task = run.tasks.get("answer_gap")
+        structure_task = run.tasks.get("answer_structure")
+        faq_task = run.tasks.get("faq_intelligence")
+        intent_task = run.tasks.get("question_intent")
+        optimization_task = run.tasks.get("answer_optimization")
+        if discovery_task and discovery_task.status == "complete":
+            discovery = discovery_task.result
+        else:
+            warning = None
+            if research is None:
+                research, warning = await _fetch_question_sample(selected, run, keyword)
+            discovery = discover_questions(run.tasks["capture"].result, url, research, run.request.language)
+            if warning:
+                discovery["detail"]["limitations"].append("Google question enrichment was incomplete: " + warning)
+        gap_result = gap_task.result if gap_task and gap_task.status == "complete" else analyze_answer_gaps(run.tasks["capture"].result, discovery, url)
+        structure_result = structure_task.result if structure_task and structure_task.status == "complete" else analyze_answer_structure(run.tasks["capture"].result, discovery, gap_result, url)
+        faq_result = faq_task.result if faq_task and faq_task.status == "complete" else audit_faq_coverage(discovery, gap_result, None, url)
+        intent_result = intent_task.result if intent_task and intent_task.status == "complete" else classify_intent(discovery, gap_result, url)
+        optimization_result = optimization_task.result if optimization_task and optimization_task.status == "complete" else None
+        return validate_aeo_result(key, build_aeo_opportunities(discovery, gap_result, structure_result, faq_result, intent_result, url, optimization_result))
     if key == "local_seo":
         phones = list(dict.fromkeys(__import__("re").findall(r"(?:\+?\d[\d\s().-]{7,}\d)", primary.get("main_text", ""))))[:10]
         return {"status": "complete", "detail": {

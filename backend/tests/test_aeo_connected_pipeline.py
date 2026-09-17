@@ -12,6 +12,8 @@ from diagnosis.storage import MemoryDiagnosisRepository
 from faq_intelligence.analysis import audit_faq_coverage
 from question_discovery.analysis import discover_questions
 from question_intent.analysis import classify_intent
+from answer_structure.analysis import analyze_answer_structure
+from aeo_opportunity.analysis import build_aeo_opportunities
 from seo_audit.crawler import CrawlResult
 from seo_audit.models import PageRecord
 from serp_competitor.models import QuestionEvidence
@@ -39,16 +41,19 @@ def test_connected_agents_collapse_one_question_into_one_evidence_linked_action(
     optimization = asyncio.run(optimize_answers(gaps, URL, None))
     faq = audit_faq_coverage(discovery, gaps, optimization, URL)
     intent = classify_intent(discovery, gaps, URL)
+    structure = analyze_answer_structure(capture, discovery, gaps, URL)
+    opportunity = build_aeo_opportunities(discovery, gaps, structure, faq, intent, URL)
 
     repository = MemoryDiagnosisRepository()
     run = repository.create(DiagnosisInput(page_url=URL, selected_agents=[
-        "question_discovery", "answer_gap", "answer_optimization", "faq_intelligence", "question_intent",
+        "question_discovery", "answer_gap", "answer_optimization", "faq_intelligence", "question_intent", "answer_structure", "aeo_opportunity",
     ]))
     run.tasks["capture"].status, run.tasks["capture"].result = "complete", capture
     for name, result in {
         "question_discovery": discovery, "answer_gap": gaps,
         "answer_optimization": optimization, "faq_intelligence": faq,
-        "question_intent": intent,
+        "question_intent": intent, "answer_structure": structure,
+        "aeo_opportunity": opportunity,
     }.items():
         run.tasks[name].status, run.tasks[name].result = "complete", result
 
@@ -56,8 +61,8 @@ def test_connected_agents_collapse_one_question_into_one_evidence_linked_action(
     findings = [item for item in report["findings"] if item.get("lineage_id")]
     assert len(findings) == 1
     finding = findings[0]
-    assert set(finding["supporting_agents"]) == {"answer_optimization", "faq_intelligence", "question_intent"}
-    assert len(finding["evidence_ids"]) == 4
+    assert set(finding["supporting_agents"]) == {"answer_optimization", "faq_intelligence", "question_intent", "aeo_opportunity"}
+    assert len(finding["evidence_ids"]) == 5
     assert all(evidence_id in report["evidence"] for evidence_id in finding["evidence_ids"])
 
 

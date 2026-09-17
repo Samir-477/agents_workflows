@@ -205,6 +205,7 @@ def extract_page(
 
     content_sections: list[ContentSection] = []
     active_heading: str | None = None
+    active_heading_level: str | None = None
     seen_section_text: set[str] = set()
     total_section_characters = 0
     semantic_roots = soup.find_all(["main", "article"])
@@ -216,7 +217,8 @@ def extract_page(
     body_root = soup.body or soup
     if content_root is None or len(clean_text(content_root.get_text(" ", strip=True)) or "") < 120:
         content_root = body_root
-    for tag in content_root.find_all(["h1", "h2", "h3", "p", "li"]):
+    element_position = 0
+    for tag in content_root.find_all(["h1", "h2", "h3", "p", "li", "dt", "dd", "table"]):
         if tag.find_parent(list(NON_CONTENT_CONTAINERS)):
             continue
         text = clean_text(tag.get_text(" ", strip=True))
@@ -224,12 +226,36 @@ def extract_page(
             continue
         if tag.name in {"h1", "h2", "h3"}:
             active_heading = text[:240]
+            active_heading_level = tag.name
             continue
         normalized = text.casefold()
         if normalized in seen_section_text or len(text) < 35:
             continue
         clipped = text[:700]
-        content_sections.append(ContentSection(heading=active_heading, text=clipped))
+        element_position += 1
+        parents = [tag, *tag.parents]
+        interactive = any(
+            node.name == "details"
+            or str(node.attrs.get("role", "")).casefold() in {"tabpanel", "dialog"}
+            or any(term in " ".join(node.get("class", [])).casefold() for term in ("accordion", "tab-panel", "tabpanel"))
+            for node in parents if getattr(node, "name", None)
+        )
+        hidden = any(
+            node.has_attr("hidden")
+            or str(node.attrs.get("aria-hidden", "")).casefold() == "true"
+            or any(term in str(node.attrs.get("style", "")).replace(" ", "").casefold() for term in ("display:none", "visibility:hidden"))
+            for node in parents if getattr(node, "attrs", None) is not None
+        )
+        element_type = {"li": "list_item", "table": "table", "dt": "definition", "dd": "definition"}.get(tag.name, "paragraph")
+        content_sections.append(ContentSection(
+            heading=active_heading,
+            text=clipped,
+            heading_level=active_heading_level,
+            element_type=element_type,
+            position=element_position,
+            interactive=interactive,
+            hidden=hidden,
+        ))
         seen_section_text.add(normalized)
         total_section_characters += len(clipped)
         if len(content_sections) >= 40 or total_section_characters >= 12_000:

@@ -14,6 +14,26 @@ export interface AgentDetail {
 }
 
 export const agentDetails: Record<string, AgentDetail> = {
+  "answer-structure": {
+    discipline: "AEO · Answer extractability", tier: "Core", tags: ["Structure", "Extraction", "Evidence"],
+    introduction: "This agent inspects only answer passages already retained by Answer Gap. It tests whether each passage is concise, direct, self-contained and attached to a useful section heading without treating a missing answer as a formatting problem.",
+    method: [["Reuse verified passages", "Consume Question Discovery and Answer Gap output in connected runs or derive the same bounded evidence inside a standalone run."], ["Locate the answer block", "Match the retained passage back to its captured content section and heading."], ["Score extractability", "Measure heading context, answer length, directness and self-containment with explicit rules."], ["Route structure work", "Retain only passages that need restructuring while preserving their stable question lineage."]],
+    coverage: [["Heading context", "Whether the answer sits under a captured descriptive heading."], ["Answer length", "Whether the passage is concise enough to extract while still useful."], ["Direct lead", "Whether the passage responds directly instead of beginning with promotional context."], ["Self-containment", "Whether the answer can be understood outside its surrounding paragraph."]],
+    weighting: [["Verified passages only", "Missing answers stay with Answer Gap and never reduce this score."], ["Structure, not truth", "The agent preserves Answer Gap's factual verdict and measures presentation only."], ["Server HTML boundary", "Client-rendered accordions or tabs remain a manual-review limitation."]],
+    output: ["Per-answer structure matrix", "Extractability score", "Evidence-linked restructuring queue", "Completion checks"],
+    questions: [["Does it decide whether an answer exists?", "No. Answer Gap owns that verdict; this agent examines the structure of retained passages only."], ["Can it run by itself?", "Yes. A standalone run performs bounded discovery and gap analysis internally; a combined run reuses the saved upstream evidence."]],
+    pairWith: ["answer-gap", "answer-optimization", "aeo-opportunity"],
+  },
+  "aeo-opportunity": {
+    discipline: "AEO · Delivery planning", tier: "Advanced", tags: ["Prioritization", "Roadmap", "Lineage"],
+    introduction: "This agent assembles one delivery queue from verified answer gaps, structure weaknesses, FAQ coverage and question journey stage. Stable question lineage prevents supporting agents from creating repeated actions.",
+    method: [["Reuse the connected chain", "Consume Question Discovery, Answer Gap, Answer Structure, FAQ Intelligence and Question Intent outputs when they are present."], ["Deduplicate by lineage", "Collapse evidence about the same question into one opportunity rather than repeating it by agent."], ["Apply a disclosed heuristic", "Combine observed provenance, verified gap severity, structure need and journey stage without claiming measured traffic or revenue."], ["Sequence delivery", "Group retained opportunities into Now, Next and Later windows with an owner and completion check."]],
+    coverage: [["Verified answer gaps", "Missing or partial answers retained by Answer Gap."], ["Structure weaknesses", "Retained passages that are difficult to extract reliably."], ["Journey stage", "Transparent delivery weight from Question Intent."], ["FAQ support", "Category evidence used as corroboration, not a duplicate task."]],
+    weighting: [["Observed evidence required", "Inferred framework questions do not enter the implementation queue."], ["Missing before formatting", "A verified missing answer carries more weight than a structure-only improvement."], ["Heuristic disclosure", "Priority is a planning score, not measured demand, conversion or revenue impact."]],
+    output: ["Deduplicated AEO opportunity queue", "Now/Next/Later roadmap", "Source-agent lineage", "Owner and completion checks"],
+    questions: [["Does it create new evidence?", "No. It organizes the evidence retained by upstream AEO specialists."], ["Can it run by itself?", "Yes. A standalone run derives the same deterministic upstream analyses internally; a combined run reuses their visible saved results."]],
+    pairWith: ["question-discovery", "answer-gap", "answer-structure"],
+  },
   "answer-gap": {
     discipline: "AEO · Answer coverage", tier: "Core", tags: ["Answers", "Evidence", "Coverage"],
     introduction: "This agent takes observed customer questions, locates the strongest answer passage on the captured page, and retains only evidence-backed missing or incomplete answers for action.",

@@ -95,6 +95,20 @@ AGENT_SCORE_AREAS: dict[str, list[tuple[str, tuple[str, ...]]]] = {
         ("Business-impact priority", ("weighted", "priority", "impact")),
         ("Content-strategy routing", ("route", "handoff", "strategy")),
     ],
+    "answer_structure": [
+        ("Direct opening", ("direct", "lead", "opening", "requested information")),
+        ("Self-containment", ("extract", "surrounding", "self-contained")),
+        ("Heading context", ("heading", "section", "context", "topic")),
+        ("Format suitability", ("format", "list", "table", "sequence")),
+        ("Concision", ("length", "word", "concise")),
+    ],
+    "aeo_opportunity": [
+        ("Evidence confidence", ("observed", "evidence", "confidence", "verified")),
+        ("Answer deficiency", ("missing", "partial", "gap", "answer")),
+        ("Journey relevance", ("journey", "evaluate", "book", "manage")),
+        ("Obstruction and dependencies", ("structure", "extract", "heading", "blocked", "depend")),
+        ("Delivery fit", ("priority", "effort", "queue", "roadmap")),
+    ],
 }
 
 METHODS: dict[str, list[dict[str, str]]] = {
@@ -178,6 +192,20 @@ METHODS: dict[str, list[dict[str, str]]] = {
         {"title": "Sequence verified gaps", "description": "Reorder Answer Gap's missing and partial answers using a transparent stage heuristic without claiming measured commercial impact."},
         {"title": "Route each stage", "description": "Recommend the specialist best suited to each observed journey stage."},
     ],
+    "answer_structure": [
+        {"title": "Reuse retained answers", "description": "Inspect only passages Answer Gap classified as answered or partial."},
+        {"title": "Locate with confidence", "description": "Map each retained passage to a server-HTML block and withhold a score when the match is not reliable."},
+        {"title": "Classify the question", "description": "Choose format expectations for yes/no, value, policy, steps, comparison, list, definition, location or explanatory answers."},
+        {"title": "Score five dimensions", "description": "Apply disclosed weights to direct opening, self-containment, heading context, format suitability and concision."},
+        {"title": "Retain structure work", "description": "Keep only answer blocks that need restructuring without changing Answer Gap's factual verdict."},
+    ],
+    "aeo_opportunity": [
+        {"title": "Reuse connected evidence", "description": "Consume question, gap, structure, FAQ, journey and optional optimized-answer results from this session."},
+        {"title": "Deduplicate by lineage", "description": "Collapse correlated evidence into one opportunity without rewarding the number of contributing agents."},
+        {"title": "Separate implementation from research", "description": "Require observed question evidence for delivery work and keep inferred hypotheses in a research-only queue."},
+        {"title": "Model dependencies", "description": "Block content production when approved property facts or another prerequisite is missing."},
+        {"title": "Sequence delivery", "description": "Use disclosed evidence, deficiency, journey, obstruction, dependency and effort factors to assign Now, Next, Later or Blocked."},
+    ],
 }
 
 PRIORITY_PENALTY = {"critical": 28, "high": 20, "medium": 11, "low": 5}
@@ -188,7 +216,7 @@ AGENT_ENGINES = {
     "keyword_cluster": "SEO", "metadata": "SEO", "content_brief": "SEO",
     "local_seo": "SEO", "content_optimizer": "SEO",
     "schema_markup": "AEO", "ai_visibility": "GEO",
-    "question_discovery": "AEO", "answer_gap": "AEO", "answer_optimization": "AEO", "faq_intelligence": "AEO", "question_intent": "AEO",
+    "question_discovery": "AEO", "answer_gap": "AEO", "answer_optimization": "AEO", "faq_intelligence": "AEO", "question_intent": "AEO", "answer_structure": "AEO", "aeo_opportunity": "AEO",
 }
 
 
@@ -382,6 +410,18 @@ def _measurements(agent: str, detail: dict[str, Any], capture: dict[str, Any], f
             ("Reprioritized gaps", detail.get("reprioritized_gap_count", 0), "High-value gaps needing action first"),
             ("Funnel stages present", sum(row["count"] > 0 for row in detail.get("distribution", [])), "Out of 5 fixed stages"),
         ],
+        "answer_structure": [
+            ("Answers retained", detail.get("assessed_answer_count", 0), "Answered or partial passages from Answer Gap"),
+            ("Blocks scored", detail.get("scored_answer_count", 0), "Confidently mapped to captured server HTML"),
+            ("Unable to locate", detail.get("unable_to_locate_count", 0), "Score withheld below the locator threshold"),
+            ("Locator confidence", f"{detail.get('assessment_confidence_score')}%" if detail.get("assessment_confidence_score") is not None else "Not scored", "Average across located blocks"),
+        ],
+        "aeo_opportunity": [
+            ("Implementation queue", detail.get("implementation_count", 0), "Observed and dependency-ready lineages"),
+            ("Blocked", detail.get("blocked_count", 0), "A prerequisite must be resolved first"),
+            ("Research queue", detail.get("research_count", 0), "Inferred hypotheses excluded from implementation"),
+            ("Observed assessed", f"{detail.get('assessed_question_count', 0)}/{detail.get('observed_question_count', 0)}", "Observed question lineages checked by Answer Gap"),
+        ],
     }
     return [{"label": label, "value": str(value), "note": note} for label, value, note in values[agent]]
 
@@ -435,6 +475,20 @@ def _success_metrics(agent: str, detail: dict[str, Any], score: int, critical: i
             {"metric": "High-value answer readiness", "current": str(detail.get("high_value_readiness_score", "Not scored")), "target": "85 or higher", "window": "Next validated rerun", "basis": "Transactional and comparison questions with a captured answer"},
             {"metric": "Reprioritized high-value gaps", "current": str(detail.get("reprioritized_gap_count", 0)), "target": "0 unresolved", "window": "Before lower-value gaps", "basis": "Missing or partial answers to funnel-critical questions"},
             {"metric": "Questions classified", "current": str(detail.get("question_count", 0)), "target": "Reassessed after Question Discovery changes", "window": "Next validated rerun", "basis": "Observed and inferred, five-stage funnel taxonomy"},
+        ]
+    if agent == "answer_structure":
+        return [
+            {"metric": "Answer structure readiness", "current": str(detail.get("answer_structure_score") if detail.get("answer_structure_score") is not None else "Not scored"), "target": "85 or higher", "window": "Next validated rerun", "basis": "Weighted direct opening, self-containment, heading context, format suitability and concision"},
+            {"metric": "Weak answer blocks", "current": str(detail.get("weak_count", 0)), "target": "0 unresolved", "window": "After approved restructuring", "basis": "Retained passages below the structure threshold"},
+            {"metric": "Unlocated answer blocks", "current": str(detail.get("unable_to_locate_count", 0)), "target": "0 unresolved", "window": "Before accepting the score", "basis": "A score is withheld when a retained passage cannot be mapped confidently"},
+            {"metric": "Locator confidence", "current": str(detail.get("assessment_confidence_score") if detail.get("assessment_confidence_score") is not None else "Not scored"), "target": "70 or higher", "window": "Current capture", "basis": "Average passage-to-section match confidence"},
+        ]
+    if agent == "aeo_opportunity":
+        return [
+            {"metric": "Observed-answer readiness", "current": str(detail.get("aeo_opportunity_score") if detail.get("aeo_opportunity_score") is not None else "Not scored"), "target": "85 or higher", "window": "Next validated rerun", "basis": "Sufficiently evidenced observed questions without unresolved AEO work"},
+            {"metric": "Implementation opportunities", "current": str(detail.get("implementation_count", 0)), "target": "0 unresolved", "window": "Across delivery windows", "basis": "One task per observed stable question lineage"},
+            {"metric": "Blocked opportunities", "current": str(detail.get("blocked_count", 0)), "target": "0 blocked", "window": "Before content production", "basis": "Missing facts or prerequisites are explicit dependencies"},
+            {"metric": "Research hypotheses", "current": str(detail.get("research_count", 0)), "target": "Validated or rejected", "window": "Research review", "basis": "Inferred demand is never scheduled as implementation work"},
         ]
     # Leading with this agent's own headline measurement stops all eleven
     # reports from presenting an identical success table.
@@ -492,10 +546,17 @@ def build_agent_reports(
         elif agent == "question_intent":
             native_score = _number(detail.get("high_value_readiness_score"))
             native_label = "Answer readiness across observed transactional and comparison questions"
+        elif agent == "answer_structure":
+            native_score = _number(detail.get("answer_structure_score"))
+            native_label = "Weighted structural quality across confidently located retained answer blocks"
+        elif agent == "aeo_opportunity":
+            native_score = _number(detail.get("aeo_opportunity_score"))
+            native_label = "Share of sufficiently evidenced observed questions without unresolved AEO work"
         if native_score is not None and agent not in {"ai_visibility", "content_optimizer"}:
             areas = _align_area_average(areas, native_score)
         calculated_score = round(sum(item["score"] for item in areas) / max(1, len(areas)))
         score = native_score if native_score is not None else calculated_score
+        no_measurement_agents = {"answer_gap", "answer_optimization", "faq_intelligence", "question_intent", "answer_structure", "aeo_opportunity"}
         # A rejected output is excluded from the session average and from the
         # decision queue already. Zeroing it here only contradicted the score
         # breakdown, which still showed the measured areas.
@@ -522,6 +583,14 @@ def build_agent_reports(
             # no assessable high-value demand surfaced, not that this
             # resort's funnel-critical questions all went unanswered.
             status = {"label": "Evidence limited", "tone": "review"}
+        if agent == "answer_structure" and detail.get("answer_structure_score") is None and case.get("output_quality") != "rejected":
+            status = {"label": "Evidence limited", "tone": "review"}
+        if agent == "aeo_opportunity" and detail.get("aeo_opportunity_score") is None and case.get("output_quality") != "rejected":
+            status = {"label": "Evidence limited", "tone": "review"}
+        is_unscored = (
+            (agent in no_measurement_agents and native_score is None)
+            or (agent == "question_discovery" and not detail.get("observed_question_count"))
+        )
         management = case.get("management", {})
         evidence_ids = list(dict.fromkeys(
             [eid for item in related for eid in item.get("evidence_ids", [])]
@@ -610,8 +679,8 @@ def build_agent_reports(
             "critical_count": critical,
             "warning_count": warnings,
             "finding_count": len(primary),
-            "executive_summary": management.get("issue_identified") or "The agent completed its configured assessment.",
-            "management_relevance": management.get("why_management_should_care") or "Review the captured result in its stated scope.",
+            "executive_summary": _clip_step(management.get("issue_identified") or "The agent completed its configured assessment.", 360),
+            "management_relevance": _clip_step(management.get("why_management_should_care") or "Review the captured result in its stated scope.", 320),
             "measurements": measurements,
             "finding_ids": [item["id"] for item in primary],
             "evidence_ids": evidence_ids,
@@ -629,13 +698,13 @@ def build_agent_reports(
             "question_landscape": detail.get("questions", []) if agent == "question_discovery" else [],
             "question_clusters": detail.get("clusters", []) if agent == "question_discovery" else [],
             "discovery_confidence_score": detail.get("discovery_confidence_score") if agent == "question_discovery" else None,
-            "score_kind": "evidence_confidence" if agent == "question_discovery" else "readiness",
+            "score_kind": "unscored" if is_unscored else ("evidence_confidence" if agent == "question_discovery" else "readiness"),
             "evidence_quality": detail.get("evidence_quality") if agent == "question_discovery" else None,
             "source_ledger": detail.get("source_ledger", []) if agent == "question_discovery" else [],
             "answer_gap_candidate_ids": detail.get("answer_gap_candidate_ids", []) if agent == "question_discovery" else [],
             "recommended_agent_handoffs": detail.get("recommended_agent_handoffs", []) if agent in {"question_discovery", "answer_gap"} else [],
             "answer_coverage": detail.get("assessments", []) if agent == "answer_gap" else [],
-            "assessment_confidence_score": detail.get("assessment_confidence_score") if agent == "answer_gap" else None,
+            "assessment_confidence_score": detail.get("assessment_confidence_score") if agent in {"answer_gap", "answer_structure", "aeo_opportunity"} else None,
             "optimized_answers": detail.get("optimized_answers", []) if agent == "answer_optimization" else [],
             "optimization_coverage_score": detail.get("optimization_coverage_score") if agent == "answer_optimization" else None,
             "faq_entries": detail.get("faq_entries", []) if agent == "faq_intelligence" else [],
@@ -644,19 +713,26 @@ def build_agent_reports(
             "reprioritized_gaps": detail.get("reprioritized_gaps", []) if agent == "question_intent" else [],
             "content_strategy": detail.get("content_strategy", []) if agent == "question_intent" else [],
             "high_value_readiness_score": detail.get("high_value_readiness_score") if agent == "question_intent" else None,
+            "structure_entries": detail.get("structure_entries", []) if agent == "answer_structure" else [],
+            "answer_structure_score": detail.get("answer_structure_score") if agent == "answer_structure" else None,
+            "aeo_opportunities": detail.get("opportunities", []) if agent == "aeo_opportunity" else [],
+            "aeo_research_opportunities": detail.get("research_opportunities", []) if agent == "aeo_opportunity" else [],
+            "aeo_roadmap": detail.get("roadmap", {}) if agent == "aeo_opportunity" else {},
+            "aeo_opportunity_score": detail.get("aeo_opportunity_score") if agent == "aeo_opportunity" else None,
         }
 
     readiness_scores = [item["score"] for item in reports.values() if item["output_quality"] != "rejected" and item.get("score_kind") == "readiness"]
     evidence_scores = [item["score"] for item in reports.values() if item["output_quality"] != "rejected" and item.get("score_kind") == "evidence_confidence"]
     scored = readiness_scores or evidence_scores
     session_score = round(sum(scored) / len(scored)) if scored else 0
+    session_status = _status(session_score, "usable", "complete") if scored else {"label": "Evidence limited", "tone": "review"}
     session = {
         "score": session_score,
-        "score_status": _status(session_score, "usable", "complete"),
+        "score_status": session_status,
         "agent_count": len(reports),
         "finding_count": len(findings),
         "critical_count": sum(item.get("priority") == "critical" for item in findings),
-        "score_basis": ("Equal-weight average of participating readiness scores; planning-agent evidence confidence is shown separately." if readiness_scores else "No readiness specialist participated; this value reflects planning-agent evidence confidence only."),
+        "score_basis": ("Equal-weight average of participating readiness scores; planning-agent evidence confidence is shown separately." if readiness_scores else ("No readiness specialist participated; this value reflects planning-agent evidence confidence only." if evidence_scores else "No participating agent produced enough observed evidence for a scored assessment.")),
     }
     return reports, session
 
@@ -678,15 +754,17 @@ def build_session_intelligence(
         if not members:
             continue
         readiness_members = [item for item in members if item.get("score_kind") == "readiness"]
-        scored_members = readiness_members or members
-        score = round(sum(item["score"] for item in scored_members) / len(scored_members))
+        evidence_members = [item for item in members if item.get("score_kind") == "evidence_confidence"]
+        scored_members = readiness_members or evidence_members
+        score = round(sum(item["score"] for item in scored_members) / len(scored_members)) if scored_members else 0
         engine_scores[engine] = score
-        weakest = min(members, key=lambda item: item["score"])
-        strongest = max(members, key=lambda item: item["score"])
+        ranked_members = scored_members or members
+        weakest = min(ranked_members, key=lambda item: item["score"])
+        strongest = max(ranked_members, key=lambda item: item["score"])
         engines.append({
             "engine": engine,
             "score": score,
-            "score_status": _status(score, "usable", "complete"),
+            "score_status": _status(score, "usable", "complete") if scored_members else {"label": "Evidence limited", "tone": "review"},
             "agent_count": len(members),
             "finding_count": sum(item["finding_count"] for item in members),
             "critical_count": sum(item["critical_count"] for item in members),
@@ -695,7 +773,7 @@ def build_session_intelligence(
             "weakest_agent_label": weakest["agent_label"],
             "strongest_agent": strongest["agent"],
             "strongest_agent_label": strongest["agent_label"],
-            "score_kind": "readiness" if readiness_members else "evidence_confidence",
+            "score_kind": "readiness" if readiness_members else ("evidence_confidence" if evidence_members else "unscored"),
         })
 
     finding_by_id = {item["id"]: item for item in findings}

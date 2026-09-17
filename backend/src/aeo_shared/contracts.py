@@ -11,6 +11,8 @@ REQUIRED_DETAIL_FIELDS = {
     "answer_optimization": {"optimized_answers", "limitations", "optimization_coverage_score"},
     "faq_intelligence": {"faq_entries", "limitations", "faq_coverage_score"},
     "question_intent": {"classified_questions", "distribution", "limitations", "high_value_readiness_score"},
+    "answer_structure": {"structure_entries", "structure_improvements", "unlocated_entries", "limitations", "answer_structure_score", "assessment_confidence_score", "scoring_weights"},
+    "aeo_opportunity": {"opportunities", "research_opportunities", "roadmap", "limitations", "aeo_opportunity_score", "assessment_confidence_score"},
 }
 
 

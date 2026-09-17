@@ -26,8 +26,10 @@ AGENTS = {
     "answer_optimization": "Direct-Answer Drafting for Verified Gaps",
     "faq_intelligence": "Resort FAQ Coverage Audit",
     "question_intent": "Question Journey Intelligence",
+    "answer_structure": "Answer Structure and Extractability",
+    "aeo_opportunity": "AEO Opportunity Planning",
 }
-LABELS = dict(zip(AGENTS, ["SEO/AEO Audit", "AI Visibility", "Internal Linking", "SERP & Competitor", "Keyword Clustering", "Metadata", "Schema Markup", "Content Brief", "Local SEO", "Content Optimizer", "Question Discovery", "Answer Gap", "Answer Optimization", "FAQ Intelligence", "Question Intent"]))
+LABELS = dict(zip(AGENTS, ["SEO/AEO Audit", "AI Visibility", "Internal Linking", "SERP & Competitor", "Keyword Clustering", "Metadata", "Schema Markup", "Content Brief", "Local SEO", "Content Optimizer", "Question Discovery", "Answer Gap", "Answer Optimization", "FAQ Intelligence", "Question Intent", "Answer Structure", "AEO Opportunity"]))
 AGENT_DEPENDENCIES = {
     "keyword_cluster": {"serp_competitor"},
     "content_brief": {"serp_competitor", "keyword_cluster"},
@@ -36,6 +38,8 @@ AGENT_DEPENDENCIES = {
     "answer_optimization": {"question_discovery", "answer_gap"},
     "faq_intelligence": {"question_discovery", "answer_gap"},
     "question_intent": {"question_discovery", "answer_gap"},
+    "answer_structure": {"question_discovery", "answer_gap"},
+    "aeo_opportunity": {"question_discovery", "answer_gap", "answer_structure", "faq_intelligence", "question_intent"},
 }
 
 
@@ -54,6 +58,7 @@ class DiagnosisInput(BaseModel):
         "keyword_cluster", "metadata", "schema_markup", "content_brief",
         "local_seo", "content_optimizer",
         "question_discovery", "answer_gap", "answer_optimization", "faq_intelligence", "question_intent",
+        "answer_structure", "aeo_opportunity",
     ]] = Field(default_factory=lambda: list(AGENTS))
 
     @model_validator(mode="before")

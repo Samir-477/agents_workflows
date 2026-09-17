@@ -41,6 +41,8 @@ OWNERS = {
     "answer_optimization": "Content and Resort Operations",
     "faq_intelligence": "Content Strategy and Resort Operations",
     "question_intent": "Content Strategy and Marketing",
+    "answer_structure": "Content and Web Engineering",
+    "aeo_opportunity": "Content Strategy and Resort Operations",
 }
 
 CLASSIFICATION_LABELS = {
@@ -148,6 +150,16 @@ def _no_finding_management(case):
             "outcome": " ".join(observations[:2]) or "No high-value transactional or comparison gap required reprioritization in the captured scope.",
             "care": "This agent sequences an existing Answer Gap verdict by journey stage; it does not measure demand volume or re-decide whether a question was actually answered.",
             "actions": ["Retain this result as the question-routing baseline and rerun it after Question Discovery or Answer Gap results change."],
+        },
+        "answer_structure": {
+            "outcome": " ".join(observations[:2]) or "Every retained answer passage met the configured structure threshold in the captured scope.",
+            "care": "This result measures whether retained answers are easy to locate and extract. It does not re-decide factual completeness or predict citation by an answer engine.",
+            "actions": ["Retain this result as the answer-structure baseline and rerun it after headings or answer copy change."],
+        },
+        "aeo_opportunity": {
+            "outcome": " ".join(observations[:2]) or "No verified AEO implementation opportunity remained after the connected evidence was deduplicated.",
+            "care": "This queue organizes verified upstream work by stable question lineage. Its priority is a planning heuristic, not measured demand, conversion or revenue impact.",
+            "actions": ["Retain this roadmap as the AEO delivery baseline and rerun it when any upstream AEO result changes."],
         },
         "internal_linking": {
             "outcome": observations[0] if observations else "No defensible contextual-link recommendation involving this resort was retained from the captured sample.",
@@ -866,6 +878,95 @@ def assemble_report(run):
                 verification="Review the classified questions and, where available, the reprioritized gap list against the captured page.",
             ))
             case["limitations"].extend(detail.get("limitations", []))
+        elif key == "answer_structure":
+            entries = detail.get("structure_entries", [])
+            unlocated = detail.get("unlocated_entries", [])
+            case["observations"].append(
+                f"Assessed {len(entries)} retained answers: {detail.get('strong_count', 0)} strong, "
+                f"{detail.get('needs_review_count', 0)} needing review, {detail.get('weak_count', 0)} weak and "
+                f"{detail.get('unable_to_locate_count', 0)} not confidently located."
+            )
+            if detail.get("answer_structure_score") is not None:
+                case["observations"].append(f"Answer structure readiness: {detail['answer_structure_score']}/100.")
+            for item in detail.get("structure_improvements", []):
+                found(
+                    f"{item['question']} — answer structure needs review",
+                    (f"Structure score {item['structure_score']}/100. " if item.get("structure_score") is not None else "Structure score withheld because the answer block was not confidently located. ") + " ".join(item.get("issues", [])),
+                    "A retained answer is harder to extract reliably when it lacks clear heading context, a direct lead or self-contained wording.",
+                    item["recommended_action"],
+                    "review",
+                    "high" if item["structure_status"] == "weak" else "medium",
+                    category=f"aeo-question:{item.get('lineage_id', item['question_id'])}",
+                    evidence_detail={
+                        "title": f"Answer structure for {item['question_id']}",
+                        "source_label": "Selected resort page and Answer Gap",
+                        "source_kind": "answer_structure",
+                        "source_url": item.get("source_url") or url,
+                        "observed_value": f"Heading: {item.get('heading') or 'not captured'}; {item['word_count']} words; structure score {item.get('structure_score') if item.get('structure_score') is not None else 'not scored'}; locator confidence {item.get('assessment_confidence', 0)}%.",
+                        "excerpt": item.get("source_excerpt"),
+                        "expected_value": "One concise, self-contained answer placed under a descriptive heading.",
+                        "location": item.get("heading") or "Captured answer passage without section heading",
+                        "method": "Confidence-gated answer-block location followed by direct-opening, self-containment, heading-context, format and concision checks",
+                        "support_type": "direct" if item.get("assessment_confidence", 0) >= 70 else "insufficient", "confidence": "high" if item.get("assessment_confidence", 0) >= 90 else "medium" if item.get("assessment_confidence", 0) >= 70 else "low",
+                        "verification": "Open the captured section and confirm the answer remains understandable when read without surrounding promotional copy.",
+                        "completion_criteria": "A reviewer can locate and extract one concise, self-contained answer under a descriptive heading.",
+                    },
+                )
+            case["assessment_evidence_ids"].append(retain_assessment_evidence(
+                key, "answer-structure-matrix", title="Retained-answer structure matrix",
+                observed_value=f"{len(entries)} retained answers assessed; {len(detail.get('structure_improvements', []))} verified structure improvements and {len(unlocated)} locator limitations retained.",
+                excerpt="\n".join(f"{item['question_id']} | {item['structure_status']} | {item.get('structure_score') if item.get('structure_score') is not None else 'not scored'} | {item['question']}" for item in entries[:20]) + (f"\n… {len(entries) - 20} additional rows retained in the specialist matrix." if len(entries) > 20 else "") if entries else "No retained answer passage was available for structure assessment.",
+                expected_value="Every retained answer is concise, self-contained and attached to useful heading context.",
+                source_kind="answer_structure", method="Answer-block structure checks over retained Answer Gap passages",
+                confidence="high" if entries else "low", support_type="direct" if entries else "insufficient",
+                location="Answer structure matrix",
+                verification="Review each retained passage in its captured section and confirm the five weighted structure dimensions.",
+            ))
+            case["limitations"].extend(detail.get("limitations", []))
+        elif key == "aeo_opportunity":
+            opportunities = detail.get("opportunities", [])
+            research = detail.get("research_opportunities", [])
+            case["observations"].append(
+                f"Built {len(opportunities)} lineage-deduplicated AEO opportunities: {detail.get('implementation_count', 0)} actionable, "
+                f"{detail.get('blocked_count', 0)} blocked and {detail.get('research_count', 0)} retained for research."
+            )
+            for item in opportunities:
+                found(
+                    f"{item['question']} — {item['issue'].lower()}",
+                    item["reason"],
+                    "This verified AEO need belongs in one sequenced delivery queue; supporting agents should strengthen the case rather than create repeated tasks.",
+                    item["recommended_action"],
+                    "confirmed" if "missing_answer" in item.get("issue_facets", []) else "review",
+                    item["priority"],
+                    category=f"aeo-question:{item['lineage_id']}",
+                    evidence_detail={
+                        "title": f"AEO opportunity for {item['question_id']}",
+                        "source_label": "Connected AEO evidence chain",
+                        "source_kind": "aeo_opportunity",
+                        "source_url": item.get("source_url") or url,
+                        "observed_value": item["reason"],
+                        "excerpt": item.get("source_excerpt") or item["question"],
+                        "expected_value": item["completion_check"],
+                        "location": f"AEO delivery queue · {item['journey_stage']}",
+                        "method": "Stable-lineage aggregation with disclosed evidence, deficiency, journey, obstruction, dependency and effort factors",
+                        "support_type": "direct", "confidence": "high" if item.get("assessment_confidence", 0) >= 70 else "medium",
+                        "verification": item["completion_check"],
+                        "completion_criteria": item["completion_check"],
+                    },
+                )
+            case["assessment_evidence_ids"].append(retain_assessment_evidence(
+                key, "aeo-opportunity-roadmap", title="Deduplicated AEO opportunity roadmap",
+                observed_value=f"{len(opportunities)} opportunities sequenced from {detail.get('observed_question_count', 0)} observed questions.",
+                excerpt=("\n".join(f"{item['priority_score']} | {item['queue']} | {item['priority']} | {item['journey_stage']} | {item['question']}" for item in opportunities)
+                         or "No verified AEO implementation opportunity was retained.")
+                        + (("\n\nResearch only:\n" + "\n".join(f"{item['priority_score']} | {item['question']}" for item in research)) if research else ""),
+                expected_value="One implementation task per stable question lineage, supported by every relevant AEO agent.",
+                source_kind="aeo_opportunity", method="Connected AEO evidence consolidation and priority heuristic",
+                confidence="high" if opportunities else "medium", support_type="direct" if opportunities else "assessment",
+                location="AEO opportunity roadmap",
+                verification="Trace every opportunity to its source agents and confirm its completion check before scheduling work.",
+            ))
+            case["limitations"].extend(detail.get("limitations", []))
         case["limitations"] = list(dict.fromkeys(case["limitations"]))
         cases.append(case)
     priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -912,6 +1013,13 @@ def assemble_report(run):
             "recommended_actions": list(dict.fromkeys(item["action"] for item in related)) or ["Retain this result as a baseline and repeat the check when the page or supporting evidence changes."],
             "limitation": case["limitations"][0] if case["limitations"] else "The conclusion is limited to the captured resort page and supporting sample.",
         }
+        if case["agent"] == "answer_structure" and related:
+            verified = len(primary_related)
+            case["management"].update({
+                "issue_identified": f"Answer Structure retained {verified} verified structure improvement{'s' if verified != 1 else ''}. {useful_observations[0] if useful_observations else ''}".strip(),
+                "why_management_should_care": "These located answer blocks need clearer openings, headings or formats before they are reliably extractable. Locator failures are reported separately as evidence limitations, not page defects.",
+                "other_findings": useful_observations[1:3],
+            })
         if related and not primary_related:
             case["management"] = {
                 "section_kind": "assessment", "source": "deterministic",
@@ -960,6 +1068,11 @@ def _editor_pack(report):
     findings = {item["id"]: item for item in report["findings"]}
     packs = []
     for case in report["cases"]:
+        # This report is already a deterministic aggregation of potentially
+        # many answer blocks. Model rewriting tends to expand it back into a
+        # list of repeated observations, so preserve the compact summary.
+        if case["agent"] == "answer_structure":
+            continue
         related = [findings[fid] for fid in case["finding_ids"] if fid in findings and findings[fid]["primary_agent"] == case["agent"]]
         if not related:
             continue

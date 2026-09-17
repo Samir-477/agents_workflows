@@ -70,6 +70,21 @@ def test_tracking_pixels_are_excluded_from_image_alt_findings():
     assert page.schema_names == ["Sterling Lake Palace Alleppey"]
 
 
+def test_content_sections_preserve_structure_and_visibility_metadata():
+    html = """<html><body><main><h2>Pool policy</h2>
+    <details><p>The outdoor swimming pool is available to registered resort guests throughout the posted operating hours.</p></details>
+    <div hidden><h3>Private note</h3><p>This hidden policy paragraph contains enough text to be retained for explicit visibility review.</p></div>
+    </main></body></html>"""
+    page = extract_page(audit_id="structure", requested_url="https://example.com/stay", final_url="https://example.com/stay",
+                        status_code=200, content_type="text/html", html=html, depth=0, scope_origin="https://example.com")
+    assert page.content_sections[0].heading == "Pool policy"
+    assert page.content_sections[0].heading_level == "h2"
+    assert page.content_sections[0].element_type == "paragraph"
+    assert page.content_sections[0].interactive is True
+    assert page.content_sections[1].hidden is True
+    assert page.content_sections[1].position == 2
+
+
 def test_repeated_page_issues_are_grouped_and_product_schema_is_checked():
     pages = [
         PageRecord(

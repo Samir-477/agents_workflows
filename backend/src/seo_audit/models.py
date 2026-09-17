@@ -85,6 +85,11 @@ class LinkRecord(BaseModel):
 class ContentSection(BaseModel):
     heading: str | None = None
     text: str
+    heading_level: Literal["h1", "h2", "h3"] | None = None
+    element_type: Literal["paragraph", "list_item", "table", "definition"] = "paragraph"
+    position: int = 0
+    interactive: bool = False
+    hidden: bool = False
 
 
 class HeadingRecord(BaseModel):

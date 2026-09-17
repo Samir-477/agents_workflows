@@ -59,6 +59,24 @@ def test_management_report_contains_only_selected_agent_cases():
     assert {item["agent"] for item in report["session_intelligence"]["priorities"]} == {"metadata"}
 
 
+def test_observation_dependent_aeo_report_is_unscored_without_observed_questions():
+    repo = MemoryDiagnosisRepository()
+    run = repo.create(DiagnosisInput(page_url=URL, run_mode="individual", selected_agents=["question_discovery"]))
+    run.tasks["capture"].status = "complete"
+    run.tasks["capture"].result = capture_data()
+    run.tasks["question_discovery"].status = "complete"
+    run.tasks["question_discovery"].result = {"detail": {
+        "questions": [], "clusters": [], "observed_question_count": 0,
+        "discovery_confidence_score": 0, "evidence_quality": {"status": "insufficient", "score": 0},
+    }}
+    report = assemble_report(run)
+    agent = report["agent_reports"]["question_discovery"]
+    assert agent["score_kind"] == "unscored"
+    assert agent["score_status"] == {"label": "Evidence limited", "tone": "review"}
+    assert report["session_score"]["score_status"] == {"label": "Evidence limited", "tone": "review"}
+    assert report["session_intelligence"]["engine_scores"][0]["score_kind"] == "unscored"
+
+
 def capture_data():
     page = PageRecord(audit_id="test", requested_url=URL, final_url=URL, status_code=200,
                       title="Example Resort - TEST FIXTURE", main_text="A resort page for test verification. " * 50,
@@ -609,7 +627,7 @@ async def test_real_agent_workflows_share_evidence_and_persist_child_results(mon
     assert len(result.report["cases"]) == len(AGENTS)
     assert all(result.tasks[key].status == "complete" for key in AGENTS)
     assert result.tasks["local_seo"].result["detail"]["mode"] == "url_assessment"
-    for key in set(AGENTS) - {"local_seo", "metadata", "keyword_cluster", "question_discovery", "answer_gap", "answer_optimization", "faq_intelligence", "question_intent"}:
+    for key in set(AGENTS) - {"local_seo", "metadata", "keyword_cluster", "question_discovery", "answer_gap", "answer_optimization", "faq_intelligence", "question_intent", "answer_structure", "aeo_opportunity"}:
         assert result.tasks[key].status == "complete", (key, result.tasks[key].error)
         assert result.tasks[key].run_id
         assert result.tasks[key].result["detail"]
@@ -647,8 +665,8 @@ def test_success_metrics_lead_with_each_agent_own_measurement():
     report = report_fixture()
     leading = set()
     for agent, result in report["agent_reports"].items():
-        if agent in {"question_discovery", "answer_gap", "answer_optimization", "faq_intelligence", "question_intent"}:
-            continue  # these five use a bespoke, non-generic metric set
+        if agent in {"question_discovery", "answer_gap", "answer_optimization", "faq_intelligence", "question_intent", "answer_structure", "aeo_opportunity"}:
+            continue  # these AEO specialists use bespoke, non-generic metric sets
         # Without this the same three generic rows were the whole success
         # table for every agent in the session.
         assert result["success_metrics"][0]["metric"] == result["measurements"][0]["label"], agent
